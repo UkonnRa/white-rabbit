@@ -1,0 +1,22 @@
+{
+  "name": "white-rabbit-backend-core",
+  "packageManager": "yarn@3.6.3",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "lint": "eslint '**/*.{ts,js}' --ignore-path ../../.eslintignore",
+    "lint:fix": "yarn lint --fix"
+  },
+  "dependencies": {
+    "@sequelize/core": "alpha",
+    "dotenv": "^16.3.1",
+    "reflect-metadata": "^0.1.13",
+    "tsyringe": "^4.8.0",
+    "uuid": "^9.0.0",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.3"
+  }
+}

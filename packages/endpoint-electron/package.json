@@ -1,0 +1,37 @@
+{
+  "name": "white-rabbit-endpoint-electron",
+  "packageManager": "yarn@3.6.3",
+  "version": "0.1.0",
+  "main": ".vite/build/main.js",
+  "author": "Ukonn Ra <ukonnra@outlook.com>",
+  "description": "White Rabbit Endpoint Electron",
+  "private": true,
+  "scripts": {
+    "start": "electron-forge start",
+    "build": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint:eslint": "eslint '**/*.{vue,ts,js}' --ignore-path ../../.eslintignore",
+    "lint:tsc": "vue-tsc --noEmit",
+    "lint": "yarn lint:eslint && yarn lint:tsc",
+    "lint:fix": "yarn lint:eslint --fix"
+  },
+  "dependencies": {
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^6.4.2",
+    "@electron-forge/maker-deb": "^6.4.2",
+    "@electron-forge/maker-rpm": "^6.4.2",
+    "@electron-forge/maker-squirrel": "^6.4.2",
+    "@electron-forge/maker-zip": "^6.4.2",
+    "@electron-forge/plugin-vite": "^6.4.2",
+    "electron": "26.2.0",
+    "rimraf": "^5.0.1",
+    "vite": "^4.4.9",
+    "vue-tsc": "^1.8.10"
+  },
+  "installConfig": {
+    "hoistingLimits": "dependencies"
+  }
+}

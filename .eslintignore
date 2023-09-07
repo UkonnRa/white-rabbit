@@ -1,0 +1,10 @@
+dist/
+node_modules/
+coverage/
+build/
+types/
+generated/
+out/
+.vite/
+target/
+.yarn

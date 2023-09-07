@@ -1,0 +1,33 @@
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional eslint cache
+.eslintcache
+
+# dotenv environment variables file
+.env
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Editor Config
+.idea/
+
+# Database
+*.sqlite
+stats.html
+
+# Build
+dist/
+build/
+out/
+.vite/

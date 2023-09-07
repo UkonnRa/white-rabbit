@@ -1,0 +1,8 @@
+@use "@ag-grid-community/styles" as ag;
+@use 'vuetify' with ($utilities: false, $color-pack: false);
+
+@include ag.grid-styles((themes: (alpine, alpine-dark)));
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

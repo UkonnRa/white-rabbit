@@ -1,0 +1,48 @@
+{
+  "name": "white-rabbit-frontend-core",
+  "packageManager": "yarn@3.6.3",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "test": "vitest run --coverage",
+    "lint:eslint": "eslint '**/*.{vue,ts,js}' --ignore-path ../../.eslintignore",
+    "lint:tsc": "vue-tsc --noEmit",
+    "lint": "yarn lint:eslint && yarn lint:tsc",
+    "lint:fix": "yarn lint:eslint --fix"
+  },
+  "dependencies": {
+    "@ag-grid-community/client-side-row-model": "^30.1.0",
+    "@ag-grid-community/core": "^30.1.0",
+    "@ag-grid-community/styles": "^30.1.0",
+    "@ag-grid-community/vue3": "^30.1.0",
+    "@ag-grid-enterprise/clipboard": "^30.1.0",
+    "@ag-grid-enterprise/column-tool-panel": "^30.1.0",
+    "@ag-grid-enterprise/core": "^30.1.0",
+    "@ag-grid-enterprise/filter-tool-panel": "^30.1.0",
+    "@ag-grid-enterprise/menu": "^30.1.0",
+    "@ag-grid-enterprise/multi-filter": "^30.1.0",
+    "@ag-grid-enterprise/range-selection": "^30.1.0",
+    "@ag-grid-enterprise/rich-select": "^30.1.0",
+    "@ag-grid-enterprise/row-grouping": "^30.1.0",
+    "@ag-grid-enterprise/set-filter": "^30.1.0",
+    "@ag-grid-enterprise/side-bar": "^30.1.0",
+    "@ag-grid-enterprise/status-bar": "^30.1.0",
+    "@date-io/date-fns": "^2.17.0",
+    "@vueuse/core": "^10.4.1",
+    "date-fns": "^2.30.0",
+    "tailwindcss": "^3.3.3",
+    "uuid": "^9.0.0",
+    "vue": "^3.3.4",
+    "vue-i18n": "^9.3.0",
+    "vue-router": "^4.2.4",
+    "vuetify": "^3.3.15"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.3",
+    "typescript": "^5.2.2",
+    "vite": "^4.4.9",
+    "vitest": "^0.34.4",
+    "vue-tsc": "^1.8.10"
+  }
+}
