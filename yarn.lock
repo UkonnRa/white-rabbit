@@ -1386,12 +1386,12 @@ __metadata:
   linkType: hard
 
 "@sequelize/core@npm:alpha":
-  version: 7.0.0-alpha.27
-  resolution: "@sequelize/core@npm:7.0.0-alpha.27"
+  version: 7.0.0-alpha.28
+  resolution: "@sequelize/core@npm:7.0.0-alpha.28"
   dependencies:
     "@types/debug": ^4.1.7
     "@types/validator": ^13.7.5
-    bnf-parser: 3.1.4
+    bnf-parser: 3.1.6
     dayjs: ^1.11.5
     debug: ^4.3.4
     dottie: ^2.0.2
@@ -1425,7 +1425,7 @@ __metadata:
       optional: true
     tedious:
       optional: true
-  checksum: ebf36f326e7c92f1a4c99cc758edf781a69890afa4f16a375ad91c901b9f1b20697d598cd804e167f25c9b7eea7a9ab8dabe24a77ad2cd11c95344833ea49b54
+  checksum: ce81b14aa8b2fed8b16003fe79dc9d23f7de956b627243eaf3a54abccabd65361db8fa919b6f475ca0eb03cd2c2eb29f325308bdb0be8d826a50ef24daad3d55
   languageName: node
   linkType: hard
 
@@ -2769,10 +2769,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bnf-parser@npm:3.1.4":
-  version: 3.1.4
-  resolution: "bnf-parser@npm:3.1.4"
-  checksum: 52c7a59b64408bf7a53c979301d6855a874409583c615c7355780a38073023075f907d4d3bb4844853be8a47442a50b2ebcda1038947a60fca1725ac322b207e
+"bnf-parser@npm:3.1.6":
+  version: 3.1.6
+  resolution: "bnf-parser@npm:3.1.6"
+  checksum: 9668d266e54e888e687008941db6da16065a24e16756c9cc82a7b0f9f3c5b3269b8e9f94a503da669a7f92d73b470166cd4c985280c04cf1e5306c02cfc98687
   languageName: node
   linkType: hard
 
@@ -4527,13 +4527,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-n@npm:^16.0.2":
-  version: 16.0.2
-  resolution: "eslint-plugin-n@npm:16.0.2"
+"eslint-plugin-n@npm:^16.1.0":
+  version: 16.1.0
+  resolution: "eslint-plugin-n@npm:16.1.0"
   dependencies:
     "@eslint-community/eslint-utils": ^4.4.0
     builtins: ^5.0.1
     eslint-plugin-es-x: ^7.1.0
+    get-tsconfig: ^4.7.0
     ignore: ^5.2.4
     is-core-module: ^2.12.1
     minimatch: ^3.1.2
@@ -4541,7 +4542,7 @@ __metadata:
     semver: ^7.5.3
   peerDependencies:
     eslint: ">=7.0.0"
-  checksum: 44cffe32a3a3cd2a706e82f45fedf79e0af7cae20e7c5f3185707233d941de1058373a27b90e86a8f0e5f9830b02c90116deaa05f139a67556954de72bc4935d
+  checksum: 6b70bf8eec74395a440ca585745eb19aba143ee00513f76893c44944675630bd898227d1b4e0ebef66fd0c84cdcf223d6613b2beee0727b5c572cd705fb50d3a
   languageName: node
   linkType: hard
 
@@ -5452,7 +5453,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"get-tsconfig@npm:^4.5.0":
+"get-tsconfig@npm:^4.5.0, get-tsconfig@npm:^4.7.0":
   version: 4.7.0
   resolution: "get-tsconfig@npm:4.7.0"
   dependencies:
@@ -10946,7 +10947,7 @@ __metadata:
     eslint-plugin-cypress: ^2.14.0
     eslint-plugin-eslint-comments: ^3.2.0
     eslint-plugin-import: ^2.28.1
-    eslint-plugin-n: ^16.0.2
+    eslint-plugin-n: ^16.1.0
     eslint-plugin-node: ^11.1.0
     eslint-plugin-prettier: ^5.0.0
     eslint-plugin-promise: ^6.1.1

@@ -7,7 +7,7 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 
 const config: ForgeConfig = {
   packagerConfig: {
-    ignore: [/config\.ts/, /tsconfig/, /src\//, /eslintrc/],
+    ignore: [/config\.ts/, /tsconfig/, /src\//, /eslintrc/, /node_modules\/\.vite/, /data\.sqlite/],
   },
   makers: [new MakerSquirrel({}), new MakerZIP({}, ["darwin"]), new MakerRpm({}), new MakerDeb({})],
   plugins: [
