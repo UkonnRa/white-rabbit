@@ -1,0 +1,30 @@
+[config]
+default_to_workspace = false
+
+[tasks.lint-fix-rustfmt]
+toolchain = "nightly"
+command = "cargo"
+args = ["fmt"]
+
+[tasks.lint-fix-clippy]
+command = "cargo"
+args = ["clippy", "--fix", "--allow-dirty", "--allow-staged"]
+
+[tasks.lint-fix]
+run_task = [
+    { name = ["lint-fix-rustfmt", "lint-fix-clippy"] },
+]
+
+[tasks.upgrade-1]
+command = "cargo"
+args = ["update"]
+
+[tasks.upgrade-2]
+install_crate = { crate_name = "cargo-edit", binary = "cargo-upgrade", test_arg = "--help" }
+command = "cargo"
+args = ["upgrade", "--incompatible", "--pinned"]
+
+[tasks.upgrade]
+run_task = [
+    { name = ["upgrade-1", "upgrade-2"] },
+]
