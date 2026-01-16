@@ -1,37 +1,63 @@
+use crate::Id;
 use crate::entity::Entity;
+use crate::error::Result;
 use crate::specification::Specification;
-use std::collections::HashSet;
+use std::array;
+use std::collections::HashMap;
 
 #[async_trait::async_trait]
 pub trait ReadRepository: Send + Sync {
     type Entity: Entity;
     type Specification: Specification;
 
-    async fn find_one_by_id(&self, id: &str) -> Option<Self::Entity> {
-        self.find_all_by_ids(&[id]).await.into_iter().next()
+    /// Find an entity by its ID
+    async fn find_one_by_id(&self, id: &Id<Self::Entity>) -> Result<Option<Self::Entity>> {
+        Ok(self
+            .find_all_by_ids(array::from_ref(id))
+            .await?
+            .get(id)
+            .cloned())
     }
 
-    async fn find_all_by_ids(&self, ids: &[&str]) -> HashSet<Self::Entity>;
+    /// Find all entities matching the given IDs
+    async fn find_all_by_ids(
+        &self,
+        ids: &[Id<Self::Entity>],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
-    async fn find_one(&self, spec: &Self::Specification) -> Option<Self::Entity> {
-        self.find_all(spec, Some(1)).await.into_iter().next()
+    /// Find the first entity matching the specification
+    async fn find_one(&self, spec: &Self::Specification) -> Result<Option<Self::Entity>> {
+        Ok(self.find_all(spec, Some(1)).await?.values().next().cloned())
     }
 
+    /// Find all entities matching the specification with optional limit
     async fn find_all(
         &self,
         spec: &Self::Specification,
         limit: Option<usize>,
-    ) -> HashSet<Self::Entity>;
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 }
 
 #[async_trait::async_trait]
 pub trait WriteRepository: ReadRepository {
-    async fn save_all(&mut self, entities: &[&Self::Entity]) -> HashSet<Self::Entity>;
+    /// Save all entities and return the saved entities
+    async fn save_all(
+        &mut self,
+        entities: &[Self::Entity],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
-    async fn delete_all_by_ids(&mut self, ids: &[&str]) -> HashSet<Self::Entity>;
+    /// Delete entities by their IDs and return the deleted entities
+    async fn delete_all_by_ids(
+        &mut self,
+        ids: &[Id<Self::Entity>],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
-    async fn delete_all(&mut self, entities: &[Self::Entity]) -> HashSet<Self::Entity> {
-        let ids: Vec<_> = entities.iter().map(|e| e.id()).collect();
+    /// Delete all given entities and return the deleted entities
+    async fn delete_all(
+        &mut self,
+        entities: &[Self::Entity],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
+        let ids: Vec<_> = entities.iter().map(|e| e.id().clone()).collect();
         self.delete_all_by_ids(&ids).await
     }
 }

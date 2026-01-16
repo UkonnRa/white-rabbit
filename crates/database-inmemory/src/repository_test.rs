@@ -2,28 +2,34 @@ use crate::repository::{InMemoryReadRepository, InMemoryWriteRepository};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use shared::entity::Entity;
-use shared::persistence::Persistence;
 use shared::repository::{ReadRepository, WriteRepository};
 use shared::specification::Specification;
+use shared::{EntityId, Id, Persistence, Result, define_id};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct User {
-    id: String,
+// Define strongly-typed IDs
+define_id!(UserId, User);
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct User {
+    id: UserId,
     version: usize,
     created_at: Option<DateTime<Utc>>,
+    created_by_id: Option<UserId>,
     last_modified_at: Option<DateTime<Utc>>,
+    last_modified_by_id: Option<UserId>,
     name: String,
-    manager: Option<Arc<User>>,
+    manager_id: Option<UserId>, // ID-only reference (SDR-aligned)
 }
 
 impl Entity for User {
-    type Operator = User;
+    type Id = UserId;
+    type OperatorId = UserId;
 
-    fn id(&self) -> &str {
-        self.id.as_str()
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 
     fn version(&self) -> usize {
@@ -34,32 +40,37 @@ impl Entity for User {
         self.created_at
     }
 
-    fn created_by(&self) -> Option<&Self::Operator> {
-        None
+    fn created_by_id(&self) -> Option<&Self::OperatorId> {
+        self.created_by_id.as_ref()
     }
 
     fn last_modified_at(&self) -> Option<DateTime<Utc>> {
         self.last_modified_at
     }
 
-    fn last_modified_by(&self) -> Option<&Self::Operator> {
-        None
+    fn last_modified_by_id(&self) -> Option<&Self::OperatorId> {
+        self.last_modified_by_id.as_ref()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 struct UserPO {
-    id: String,
+    id: UserId,
     version: usize,
     created_at: Option<DateTime<Utc>>,
+    created_by_id: Option<UserId>,
     last_modified_at: Option<DateTime<Utc>>,
+    last_modified_by_id: Option<UserId>,
     name: String,
-    manager_id: Option<String>,
+    manager_id: Option<UserId>,
 }
 
 impl Persistence for UserPO {
-    fn id(&self) -> &str {
-        self.id.as_str()
+    type Id = UserId;
+    type OperatorId = UserId;
+
+    fn id(&self) -> &Self::Id {
+        &self.id
     }
 
     fn version(&self) -> usize {
@@ -70,24 +81,24 @@ impl Persistence for UserPO {
         self.created_at
     }
 
-    fn created_by(&self) -> Option<String> {
-        None
+    fn created_by_id(&self) -> Option<&Self::OperatorId> {
+        self.created_by_id.as_ref()
     }
 
     fn last_modified_at(&self) -> Option<DateTime<Utc>> {
         self.last_modified_at
     }
 
-    fn last_modified_by(&self) -> Option<String> {
-        None
+    fn last_modified_by_id(&self) -> Option<&Self::OperatorId> {
+        self.last_modified_by_id.as_ref()
     }
 }
 
 #[derive(Debug)]
 enum UserSpecification {
-    Id(HashSet<String>),
+    Id(HashSet<UserId>),
     Name(HashSet<String>),
-    Manager(Option<HashSet<String>>),
+    Manager(Option<HashSet<UserId>>),
 }
 
 impl Specification for UserSpecification {}
@@ -129,21 +140,15 @@ impl InMemoryReadRepository for UserRepository {
     }
 
     fn convert_to_entity(&self, persistence: Self::Persistence) -> Self::Entity {
-        let manager = if let Some(manager_id) = &persistence.manager_id {
-            self.get_storage()
-                .get(manager_id)
-                .cloned()
-                .map(|po| self.convert_to_entity(po))
-        } else {
-            None
-        };
         User {
             id: persistence.id,
             version: persistence.version,
             created_at: persistence.created_at,
+            created_by_id: persistence.created_by_id,
             last_modified_at: persistence.last_modified_at,
+            last_modified_by_id: persistence.last_modified_by_id,
             name: persistence.name,
-            manager: manager.map(Arc::new),
+            manager_id: persistence.manager_id,
         }
     }
 
@@ -152,9 +157,11 @@ impl InMemoryReadRepository for UserRepository {
             id: entity.id.clone(),
             version: entity.version,
             created_at: entity.created_at,
+            created_by_id: entity.created_by_id.clone(),
             last_modified_at: entity.last_modified_at,
+            last_modified_by_id: entity.last_modified_by_id.clone(),
             name: entity.name.clone(),
-            manager_id: entity.manager.as_ref().map(|m| m.id.clone()),
+            manager_id: entity.manager_id.clone(),
         }
     }
 }
@@ -164,11 +171,17 @@ impl InMemoryWriteRepository for UserRepository {}
 
 #[async_trait::async_trait]
 impl WriteRepository for UserRepository {
-    async fn save_all(&mut self, entities: &[&Self::Entity]) -> HashSet<Self::Entity> {
+    async fn save_all(
+        &mut self,
+        entities: &[Self::Entity],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         self.__save_all(entities).await
     }
 
-    async fn delete_all_by_ids(&mut self, ids: &[&str]) -> HashSet<Self::Entity> {
+    async fn delete_all_by_ids(
+        &mut self,
+        ids: &[Id<Self::Entity>],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         self.__delete_all_by_ids(ids).await
     }
 }
@@ -178,7 +191,10 @@ impl ReadRepository for UserRepository {
     type Entity = User;
     type Specification = UserSpecification;
 
-    async fn find_all_by_ids(&self, ids: &[&str]) -> HashSet<Self::Entity> {
+    async fn find_all_by_ids(
+        &self,
+        ids: &[Id<Self::Entity>],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         self.__find_all_by_ids(ids).await
     }
 
@@ -186,102 +202,133 @@ impl ReadRepository for UserRepository {
         &self,
         spec: &Self::Specification,
         limit: Option<usize>,
-    ) -> HashSet<Self::Entity> {
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         self.__find_all(spec, limit).await
     }
 }
 
 #[tokio::test]
 async fn test() -> anyhow::Result<()> {
-    let user_alice = Arc::new(User {
-        id: "1".to_string(),
-        version: 1,
-        created_at: Some(Utc.with_ymd_and_hms(2016, 1, 1, 0, 0, 0).unwrap()),
-        last_modified_at: Some(Utc.with_ymd_and_hms(2016, 2, 1, 0, 0, 0).unwrap()),
-        name: "Alice".to_string(),
-        manager: None,
-    });
+    let user_alice_id = UserId::from_value("1");
+    let user_bob_id = UserId::from_value("2");
+    let user_charlie_id = UserId::from_value("3");
+    let user_betty_id = UserId::from_value("4");
 
-    let user_bob = Arc::new(User {
-        id: "2".to_string(),
-        version: 1,
-        created_at: Some(Utc.with_ymd_and_hms(2016, 3, 1, 0, 0, 0).unwrap()),
-        last_modified_at: Some(Utc.with_ymd_and_hms(2016, 4, 1, 0, 0, 0).unwrap()),
-        name: "Bob".to_string(),
-        manager: Some(user_alice.clone()),
-    });
+    let users = Arc::new(vec![
+        User {
+            id: UserId::from_value("1"),
+            version: 1,
+            created_at: Some(Utc.with_ymd_and_hms(2016, 1, 1, 0, 0, 0).unwrap()),
+            created_by_id: None,
+            last_modified_at: Some(Utc.with_ymd_and_hms(2016, 2, 1, 0, 0, 0).unwrap()),
+            last_modified_by_id: None,
+            name: "Alice".to_string(),
+            manager_id: None,
+        },
+        User {
+            id: UserId::from_value("2"),
+            version: 1,
+            created_at: Some(Utc.with_ymd_and_hms(2016, 3, 1, 0, 0, 0).unwrap()),
+            created_by_id: None,
+            last_modified_at: Some(Utc.with_ymd_and_hms(2016, 4, 1, 0, 0, 0).unwrap()),
+            last_modified_by_id: None,
+            name: "Bob".to_string(),
+            manager_id: Some(user_alice_id.clone()),
+        },
+        User {
+            id: UserId::from_value("3"),
+            version: 1,
+            created_at: Some(Utc.with_ymd_and_hms(2016, 5, 1, 0, 0, 0).unwrap()),
+            created_by_id: None,
+            last_modified_at: Some(Utc.with_ymd_and_hms(2016, 6, 1, 0, 0, 0).unwrap()),
+            last_modified_by_id: None,
+            name: "Charlie".to_string(),
+            manager_id: Some(user_bob_id.clone()),
+        },
+        User {
+            id: UserId::from_value("4"),
+            version: 1,
+            created_at: Some(Utc.with_ymd_and_hms(2016, 7, 1, 0, 0, 0).unwrap()),
+            created_by_id: None,
+            last_modified_at: Some(Utc.with_ymd_and_hms(2016, 8, 1, 0, 0, 0).unwrap()),
+            last_modified_by_id: None,
+            name: "Betty".to_string(),
+            manager_id: Some(user_alice_id.clone()),
+        },
+    ]);
 
-    let user_charlie = User {
-        id: "3".to_string(),
-        version: 1,
-        created_at: Some(Utc.with_ymd_and_hms(2016, 5, 1, 0, 0, 0).unwrap()),
-        last_modified_at: Some(Utc.with_ymd_and_hms(2016, 6, 1, 0, 0, 0).unwrap()),
-        name: "Charlie".to_string(),
-        manager: Some(user_bob.clone()),
-    };
+    let _user_alice = &users[0];
+    let user_bob = &users[1];
+    let user_charlie = &users[2];
+    let user_betty = &users[3];
 
-    let user_betty = User {
-        id: "4".to_string(),
-        version: 1,
-        created_at: Some(Utc.with_ymd_and_hms(2016, 7, 1, 0, 0, 0).unwrap()),
-        last_modified_at: Some(Utc.with_ymd_and_hms(2016, 8, 1, 0, 0, 0).unwrap()),
-        name: "Betty".to_string(),
-        manager: Some(user_alice.clone()),
-    };
-
-    let user_repo = Arc::new(Mutex::new(UserRepository::default()));
+    let user_repo = Mutex::new(UserRepository::default());
 
     let mut user_repo = user_repo.lock().await;
-    user_repo
-        .save_all(&[
-            user_alice.as_ref(),
-            user_bob.as_ref(),
-            &user_charlie,
-            &user_betty,
-        ])
-        .await;
+    user_repo.save_all(&users).await?;
 
     let result = user_repo
-        .find_all_by_ids(&[user_charlie.id.as_str(), user_betty.id.as_str()])
-        .await;
+        .find_all_by_ids(&[user_charlie_id.clone(), user_betty_id.clone()])
+        .await?;
     assert_eq!(result.len(), 2);
-    assert!(result.contains(&user_charlie));
-    assert!(result.contains(&user_betty));
+    assert!(result.contains_key(&user_charlie_id));
+    assert!(result.contains_key(&user_betty_id));
 
-    let new_charlie = result.iter().find(|u| u.name == user_charlie.name).unwrap();
-    assert_eq!(new_charlie.manager, user_charlie.manager);
+    let result2 = user_repo
+        .find_all(
+            &UserSpecification::Id(HashSet::from_iter([
+                user_charlie_id.clone(),
+                user_betty_id.clone(),
+            ])),
+            None,
+        )
+        .await?;
+    assert_eq!(result2.len(), 2);
+    assert_eq!(result2, result);
+
+    let new_charlie = result
+        .values()
+        .find(|u| u.name == user_charlie.name)
+        .unwrap();
+    assert_eq!(new_charlie.manager_id, user_charlie.manager_id);
 
     let result = user_repo
         .find_all(
-            &UserSpecification::Manager(Some(HashSet::from_iter([user_alice.id.clone()]))),
+            &UserSpecification::Manager(Some(HashSet::from_iter([user_alice_id.clone()]))),
             None,
         )
-        .await;
+        .await?;
     assert_eq!(result.len(), 2);
-    assert!(result.contains(&user_betty));
-    assert!(result.contains(&user_bob));
+    assert!(result.contains_key(&user_betty_id));
+    assert!(result.contains_key(&user_bob_id));
 
     let result = user_repo
         .find_all(
             &UserSpecification::Name(HashSet::from_iter([
                 user_charlie.name.clone(),
-                user_bob.name.to_lowercase().clone(),
+                user_bob.name.to_lowercase(),
                 "Nonexistent".to_string(),
             ])),
             None,
         )
-        .await;
+        .await?;
     assert_eq!(result.len(), 2);
-    assert!(result.contains(&user_charlie));
-    assert!(result.contains(&user_bob));
+    assert!(result.contains_key(&user_charlie_id));
+    assert!(result.contains_key(&user_bob_id));
 
-    let results = user_repo.delete_all_by_ids(&[user_bob.id()]).await;
+    let results = user_repo.delete_all_by_ids(&[user_bob_id.clone()]).await?;
     assert_eq!(results.len(), 1);
-    assert!(results.contains(&user_bob));
+    assert!(results.contains_key(&user_bob_id));
 
-    let result = user_repo.find_all_by_ids(&[user_charlie.id()]).await;
+    let result = user_repo
+        .find_all_by_ids(&[user_charlie_id.clone()])
+        .await?;
     assert_eq!(result.len(), 1);
-    assert!(result.iter().next().unwrap().manager.is_none());
+    // Manager ID still references the deleted user (referential integrity is a separate concern)
+    assert_eq!(
+        result.values().next().unwrap().manager_id,
+        Some(user_bob_id.clone())
+    );
 
     Ok(())
 }

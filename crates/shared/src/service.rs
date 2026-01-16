@@ -1,4 +1,5 @@
 use crate::entity::Entity;
+use crate::error::Result;
 use crate::repository::ReadRepository;
 use crate::specification::Specification;
 
@@ -12,5 +13,5 @@ pub trait ReadService: Send + Sync {
     async fn filter_readable(
         operator: &Self::Operator,
         entities: &[Self::Entity],
-    ) -> Vec<Self::Entity>;
+    ) -> Result<Vec<Self::Entity>>;
 }
