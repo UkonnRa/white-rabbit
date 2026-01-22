@@ -2,13 +2,11 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared::{Entity, define_id};
+use shared::DomainModel;
 
 use crate::user::UserId;
 
-define_id!(JournalId, Journal);
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, DomainModel)]
 pub struct Journal {
     pub id: JournalId,
 
@@ -22,33 +20,4 @@ pub struct Journal {
     pub description: String,
 
     pub admin_ids: HashSet<UserId>,
-}
-
-impl Entity for Journal {
-    type Id = JournalId;
-    type OperatorId = UserId;
-
-    fn id(&self) -> &Self::Id {
-        &self.id
-    }
-
-    fn version(&self) -> usize {
-        self.version
-    }
-
-    fn created_at(&self) -> Option<DateTime<Utc>> {
-        self.created_at
-    }
-
-    fn created_by_id(&self) -> Option<&Self::OperatorId> {
-        self.created_by_id.as_ref()
-    }
-
-    fn last_modified_at(&self) -> Option<DateTime<Utc>> {
-        self.last_modified_at
-    }
-
-    fn last_modified_by_id(&self) -> Option<&Self::OperatorId> {
-        self.last_modified_by_id.as_ref()
-    }
 }

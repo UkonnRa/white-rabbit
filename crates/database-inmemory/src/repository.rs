@@ -1,18 +1,11 @@
-use shared::entity::Entity;
-use shared::persistence::Persistence;
-use shared::repository::ReadRepository;
-use shared::{EntityId, Id, Result};
+use shared::{Entity, EntityId, Id, Persistence, ReadRepository, Result, Specification};
 use std::collections::HashMap;
 
 #[async_trait::async_trait]
-pub trait InMemoryReadRepository: ReadRepository {
+pub trait InMemoryReadRepository<S: Specification>: ReadRepository<S> {
     type Persistence: Persistence;
 
-    fn satisfies(
-        &self,
-        persistence: &Self::Persistence,
-        specification: &Self::Specification,
-    ) -> bool;
+    fn satisfies(&self, persistence: &Self::Persistence, specification: &S) -> bool;
 
     fn get_storage(&self) -> &HashMap<String, Self::Persistence>;
 
@@ -40,7 +33,7 @@ pub trait InMemoryReadRepository: ReadRepository {
 
     async fn __find_all(
         &self,
-        spec: &Self::Specification,
+        spec: &S,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         Ok(self
@@ -60,7 +53,7 @@ pub trait InMemoryReadRepository: ReadRepository {
 }
 
 #[async_trait::async_trait]
-pub trait InMemoryWriteRepository: InMemoryReadRepository {
+pub trait InMemoryWriteRepository<S: Specification>: InMemoryReadRepository<S> {
     async fn __save_all(
         &mut self,
         entities: &[Self::Entity],

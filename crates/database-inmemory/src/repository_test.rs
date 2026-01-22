@@ -1,18 +1,13 @@
 use crate::repository::{InMemoryReadRepository, InMemoryWriteRepository};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use shared::entity::Entity;
-use shared::repository::{ReadRepository, WriteRepository};
-use shared::specification::Specification;
-use shared::{EntityId, Id, Persistence, Result, define_id};
+use shared::{DomainModel, EntityId, Id, Persistence, Result};
+use shared::{ReadRepository, Specification, WriteRepository};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-// Define strongly-typed IDs
-define_id!(UserId, User);
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, DomainModel)]
 pub struct User {
     id: UserId,
     version: usize,
@@ -22,35 +17,6 @@ pub struct User {
     last_modified_by_id: Option<UserId>,
     name: String,
     manager_id: Option<UserId>, // ID-only reference (SDR-aligned)
-}
-
-impl Entity for User {
-    type Id = UserId;
-    type OperatorId = UserId;
-
-    fn id(&self) -> &Self::Id {
-        &self.id
-    }
-
-    fn version(&self) -> usize {
-        self.version
-    }
-
-    fn created_at(&self) -> Option<DateTime<Utc>> {
-        self.created_at
-    }
-
-    fn created_by_id(&self) -> Option<&Self::OperatorId> {
-        self.created_by_id.as_ref()
-    }
-
-    fn last_modified_at(&self) -> Option<DateTime<Utc>> {
-        self.last_modified_at
-    }
-
-    fn last_modified_by_id(&self) -> Option<&Self::OperatorId> {
-        self.last_modified_by_id.as_ref()
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -107,13 +73,13 @@ impl Specification for UserSpecification {}
 struct UserRepository(HashMap<String, UserPO>);
 
 #[async_trait::async_trait]
-impl InMemoryReadRepository for UserRepository {
+impl InMemoryReadRepository<UserSpecification> for UserRepository {
     type Persistence = UserPO;
 
     fn satisfies(
         &self,
         persistence: &Self::Persistence,
-        specification: &Self::Specification,
+        specification: &UserSpecification,
     ) -> bool {
         match specification {
             UserSpecification::Id(value) => value.contains(&persistence.id),
@@ -167,10 +133,10 @@ impl InMemoryReadRepository for UserRepository {
 }
 
 #[async_trait::async_trait]
-impl InMemoryWriteRepository for UserRepository {}
+impl InMemoryWriteRepository<UserSpecification> for UserRepository {}
 
 #[async_trait::async_trait]
-impl WriteRepository for UserRepository {
+impl WriteRepository<UserSpecification> for UserRepository {
     async fn save_all(
         &mut self,
         entities: &[Self::Entity],
@@ -187,9 +153,8 @@ impl WriteRepository for UserRepository {
 }
 
 #[async_trait::async_trait]
-impl ReadRepository for UserRepository {
+impl ReadRepository<UserSpecification> for UserRepository {
     type Entity = User;
-    type Specification = UserSpecification;
 
     async fn find_all_by_ids(
         &self,
@@ -200,7 +165,7 @@ impl ReadRepository for UserRepository {
 
     async fn find_all(
         &self,
-        spec: &Self::Specification,
+        spec: &UserSpecification,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         self.__find_all(spec, limit).await
@@ -260,7 +225,7 @@ async fn test() -> anyhow::Result<()> {
     let _user_alice = &users[0];
     let user_bob = &users[1];
     let user_charlie = &users[2];
-    let user_betty = &users[3];
+    let _user_betty = &users[3];
 
     let user_repo = Mutex::new(UserRepository::default());
 

@@ -1,14 +1,13 @@
 use crate::Id;
+use crate::Specification;
 use crate::entity::Entity;
 use crate::error::Result;
-use crate::specification::Specification;
 use std::array;
 use std::collections::HashMap;
 
 #[async_trait::async_trait]
-pub trait ReadRepository: Send + Sync {
+pub trait ReadRepository<S: Specification>: Send + Sync {
     type Entity: Entity;
-    type Specification: Specification;
 
     /// Find an entity by its ID
     async fn find_one_by_id(&self, id: &Id<Self::Entity>) -> Result<Option<Self::Entity>> {
@@ -26,20 +25,20 @@ pub trait ReadRepository: Send + Sync {
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
     /// Find the first entity matching the specification
-    async fn find_one(&self, spec: &Self::Specification) -> Result<Option<Self::Entity>> {
+    async fn find_one(&self, spec: &S) -> Result<Option<Self::Entity>> {
         Ok(self.find_all(spec, Some(1)).await?.values().next().cloned())
     }
 
     /// Find all entities matching the specification with optional limit
     async fn find_all(
         &self,
-        spec: &Self::Specification,
+        spec: &S,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 }
 
 #[async_trait::async_trait]
-pub trait WriteRepository: ReadRepository {
+pub trait WriteRepository<S: Specification>: ReadRepository<S> {
     /// Save all entities and return the saved entities
     async fn save_all(
         &mut self,
