@@ -36,21 +36,7 @@ fn expand_domain_model(input: DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let _id_field = field_type(&fields, "id")?;
     let _version_field = field_type(&fields, "version")?;
     let _created_at_field = field_type(&fields, "created_at")?;
-    let created_by_field = field_type(&fields, "created_by_id")?;
     let _last_modified_at_field = field_type(&fields, "last_modified_at")?;
-    let last_modified_by_field = field_type(&fields, "last_modified_by_id")?;
-
-    let operator_id_ty = option_inner_type(&created_by_field)
-        .or_else(|| option_inner_type(&last_modified_by_field))
-        .ok_or_else(|| {
-            syn::Error::new_spanned(
-                name.clone(),
-                "created_by_id or last_modified_by_id must be Option<OperatorId>",
-            )
-        })?;
-
-    let created_by_expr = option_as_ref_expr("created_by_id", &created_by_field)?;
-    let last_modified_by_expr = option_as_ref_expr("last_modified_by_id", &last_modified_by_field)?;
 
     let tokens = quote! {
         #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -97,7 +83,6 @@ fn expand_domain_model(input: DeriveInput) -> syn::Result<proc_macro2::TokenStre
 
         impl ::shared::Entity for #name {
             type Id = #id_ty;
-            type OperatorId = #operator_id_ty;
 
             fn id(&self) -> &Self::Id {
                 &self.id
@@ -111,16 +96,8 @@ fn expand_domain_model(input: DeriveInput) -> syn::Result<proc_macro2::TokenStre
                 self.created_at
             }
 
-            fn created_by_id(&self) -> Option<&Self::OperatorId> {
-                #created_by_expr
-            }
-
             fn last_modified_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
                 self.last_modified_at
-            }
-
-            fn last_modified_by_id(&self) -> Option<&Self::OperatorId> {
-                #last_modified_by_expr
             }
         }
 
@@ -149,28 +126,4 @@ fn field_type(
                 format!("Field '{}' is required for DomainModel", name),
             )
         })
-}
-
-fn option_inner_type(ty: &Type) -> Option<Type> {
-    if let Type::Path(type_path) = ty {
-        let segment = type_path.path.segments.last()?;
-        if segment.ident == "Option"
-            && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-        {
-            let arg = args.args.first()?;
-            if let syn::GenericArgument::Type(inner) = arg {
-                return Some(inner.clone());
-            }
-        }
-    }
-    None
-}
-
-fn option_as_ref_expr(field_name: &str, ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
-    let ident = Ident::new(field_name, proc_macro2::Span::call_site());
-    if option_inner_type(ty).is_some() {
-        Ok(quote! { self.#ident.as_ref() })
-    } else {
-        Ok(quote! { Some(&self.#ident) })
-    }
 }

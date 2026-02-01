@@ -1,7 +1,7 @@
-use crate::Id;
-use crate::Specification;
 use crate::entity::Entity;
 use crate::error::Result;
+use crate::id::Id;
+use crate::specification::Specification;
 use std::array;
 use std::collections::HashMap;
 

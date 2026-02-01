@@ -1,6 +1,9 @@
-use crate::Entity;
+use crate::entity::Entity;
 use std::fmt::Debug;
 use std::hash::Hash;
+
+/// Alias for the ID type of an entity
+pub type Id<E> = <E as Entity>::Id;
 
 pub trait EntityId: Clone + Debug + Eq + Hash + Send + Sync + 'static {
     type Entity: Entity;
