@@ -6,6 +6,7 @@ mod persistence;
 mod repository;
 mod service;
 mod specification;
+mod r#type;
 
 pub use command::Command;
 pub use entity::Entity;
@@ -16,3 +17,4 @@ pub use repository::{ReadRepository, WriteRepository};
 pub use service::{ReadService, WriteService};
 pub use shared_derive::DomainModel;
 pub use specification::Specification;
+pub use r#type::{NonEmpty, NonNegative};

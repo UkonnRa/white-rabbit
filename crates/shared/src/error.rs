@@ -1,20 +1,10 @@
-use thiserror::Error;
-
 /// Shared error type for core domain and infrastructure.
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Not found: {0}")]
-    NotFound(String),
-    #[error("Validation failed: {0}")]
-    Validation(String),
-    #[error("Permission denied: {0}")]
-    Forbidden(String),
-    #[error("Conflict: {0}")]
-    Conflict(String),
-    #[error("External error: {0}")]
-    External(String),
-    #[error("Internal error: {0}")]
-    Internal(String),
+    #[error("value must be non empty")]
+    NonEmpty,
+    #[error("Non negative values expected, but got {0}")]
+    NonNegativeValue(String),
 }
 
 /// Shared result type.

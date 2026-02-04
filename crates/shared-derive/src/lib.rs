@@ -63,6 +63,12 @@ fn expand_domain_model(input: DeriveInput) -> syn::Result<proc_macro2::TokenStre
             }
         }
 
+        impl Default for #id_ty {
+            fn default() -> Self {
+                Self(::uuid::Uuid::now_v7().to_string())
+            }
+        }
+
         impl From<String> for #id_ty {
             fn from(s: String) -> Self {
                 Self(s)

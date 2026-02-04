@@ -17,4 +17,14 @@ pub struct Account {
     pub description: String,
     pub journal_id: JournalId,
     pub parent_id: Option<AccountId>,
+    pub r#type: AccountType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum AccountType {
+    Asset,
+    Liability,
+    Equity,
+    Income,
+    Expense,
 }

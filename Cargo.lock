@@ -196,6 +196,7 @@ dependencies = [
  "shared",
  "strum",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -664,6 +665,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "rust_decimal",
  "serde",
  "serde_json",
  "shared-derive",

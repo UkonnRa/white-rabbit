@@ -3,18 +3,20 @@ use std::collections::HashSet;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use shared::{NonEmpty, NonNegative};
 
-use crate::account::AccountId;
+use crate::account::{AccountId, AccountType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecordItems {
-    Transactions(Vec<RecordItemTransaction>),
-    Validations(Vec<RecordItemValidation>),
+    Transactions(NonEmpty<Vec<RecordItemTransaction>>),
+    Validations(NonEmpty<Vec<RecordItemValidation>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecordItemTransaction {
     pub account_id: AccountId,
+    pub account_type: AccountType,
     pub amount: Amount,
     // The [@ part](https://beancount.github.io/docs/beancount_language_syntax.html#costs-and-prices) in beancount,  e.g.:
     //   2012-11-03 * "Transfer to account in Canada"
@@ -27,6 +29,16 @@ pub struct RecordItemTransaction {
     //     Assets:ETrade:Cash         -1830.70 USD
     pub cost: HashSet<Cost>,
     pub description: String,
+}
+
+impl RecordItemTransaction {
+    pub fn amount_number(&self) -> Decimal {
+        if let Some(price) = &self.price {
+            *price.amount * *self.amount.amount
+        } else {
+            *self.amount.amount
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -45,16 +57,16 @@ pub enum RecordItemKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Amount {
-    pub amount: Decimal,
+    pub amount: NonNegative<Decimal>,
     // currency, stock symbol, commodity, etc.
-    pub unit: String,
+    pub unit: NonEmpty<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Cost {
     Price(Amount),
     Date(NaiveDate),
-    Reference(String),
+    Reference(NonEmpty<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, strum::Display)]

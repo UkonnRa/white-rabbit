@@ -32,4 +32,18 @@ pub enum Error {
     },
 }
 
+impl From<Error> for shared::Error {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::NonEmpty { .. } => shared::Error::NonEmpty,
+            Error::NonNegativeValue { current, .. } => shared::Error::NonNegativeValue(current),
+            _ => {
+                // For other error types that don't map directly, we can't convert
+                // This is a fallback that shouldn't normally be used
+                shared::Error::NonEmpty
+            }
+        }
+    }
+}
+
 pub type Result<T> = core::result::Result<T, Error>;

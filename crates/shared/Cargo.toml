@@ -13,3 +13,4 @@ serde_json.workspace = true
 thiserror.workspace = true
 shared-derive = { path = "../shared-derive" }
 uuid.workspace = true
+rust_decimal.workspace = true
