@@ -1,3 +1,5 @@
+//! Journal is a collection of [`crate::account::Account`]
+//!
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared::DomainModel;
