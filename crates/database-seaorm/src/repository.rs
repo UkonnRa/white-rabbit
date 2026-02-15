@@ -1,30 +1,119 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{ActiveModelTrait, Condition, DatabaseConnection, IntoActiveModel, QuerySelect};
-use shared::{Entity, Id, ReadRepository, Result, Specification};
+use sea_orm::{
+    ActiveModelTrait, Condition, DatabaseConnection, DatabaseTransaction, IntoActiveModel,
+    QuerySelect, TransactionTrait,
+};
+use shared::{Entity, Id, ReadRepository, RepositorySession, Result, Specification};
 use std::collections::HashMap;
 
-/// Bridge trait between SeaORM entities and the app's `ReadRepository`.
-///
-/// Implementors define how to convert between SeaORM models and domain entities,
-/// and how to translate domain specifications into SeaORM conditions.
+// ── SeaOrmSession ────────────────────────────────────────────────
+
+/// Session for SeaORM-backed repositories. Holds the database connection
+/// and an optional transaction.
+pub struct SeaOrmSession {
+    db: DatabaseConnection,
+    txn: Option<DatabaseTransaction>,
+}
+
+impl SeaOrmSession {
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db, txn: None }
+    }
+
+    // ── Connection dispatch methods ──────────────────────────────
+    //
+    // These encapsulate the match on txn vs db, eliminating the need
+    // for a `with_conn!` macro. SeaORM's `ConnectionTrait` is not
+    // dyn-compatible (generic methods), so we duplicate each call.
+
+    /// Execute a SELECT query, returning all matching models.
+    pub async fn query_all<E: EntityTrait>(
+        &self,
+        select: sea_orm::Select<E>,
+    ) -> std::result::Result<Vec<E::Model>, sea_orm::DbErr> {
+        match &self.txn {
+            Some(txn) => select.all(txn).await,
+            None => select.all(&self.db).await,
+        }
+    }
+
+    /// Execute an INSERT statement.
+    pub async fn exec_insert<A: ActiveModelTrait>(
+        &self,
+        insert: sea_orm::Insert<A>,
+    ) -> std::result::Result<sea_orm::InsertResult<A>, sea_orm::DbErr>
+    where
+        <A::Entity as EntityTrait>::Model: IntoActiveModel<A>,
+    {
+        match &self.txn {
+            Some(txn) => insert.exec(txn).await,
+            None => insert.exec(&self.db).await,
+        }
+    }
+
+    /// Execute a DELETE MANY statement.
+    pub async fn exec_delete<E: EntityTrait>(
+        &self,
+        delete: sea_orm::DeleteMany<E>,
+    ) -> std::result::Result<sea_orm::DeleteResult, sea_orm::DbErr> {
+        match &self.txn {
+            Some(txn) => delete.exec(txn).await,
+            None => delete.exec(&self.db).await,
+        }
+    }
+
+    /// Execute an UPDATE on an active model.
+    pub async fn exec_update<A: ActiveModelTrait + sea_orm::ActiveModelBehavior + Send>(
+        &self,
+        model: A,
+    ) -> std::result::Result<<A::Entity as EntityTrait>::Model, sea_orm::DbErr>
+    where
+        <A::Entity as EntityTrait>::Model: IntoActiveModel<A>,
+    {
+        match &self.txn {
+            Some(txn) => model.update(txn).await,
+            None => model.update(&self.db).await,
+        }
+    }
+}
+
 #[async_trait::async_trait]
-pub trait SeaOrmReadRepository<S: Specification>: ReadRepository<S> {
+impl RepositorySession for SeaOrmSession {
+    async fn begin(&mut self) -> Result<()> {
+        self.txn = Some(self.db.begin().await.map_err(shared::ErrorKind::internal)?);
+        Ok(())
+    }
+
+    async fn commit(&mut self) -> Result<()> {
+        if let Some(txn) = self.txn.take() {
+            txn.commit().await.map_err(shared::ErrorKind::internal)?;
+        }
+        Ok(())
+    }
+
+    async fn rollback(&mut self) -> Result<()> {
+        if let Some(txn) = self.txn.take() {
+            txn.rollback().await.map_err(shared::ErrorKind::internal)?;
+        }
+        Ok(())
+    }
+}
+
+// ── SeaOrmReadRepository ─────────────────────────────────────────
+
+#[async_trait::async_trait]
+pub trait SeaOrmReadRepository<S: Specification>:
+    ReadRepository<S, Session = SeaOrmSession>
+{
     type SeaOrmEntity: EntityTrait<Model: IntoActiveModel<Self::SeaOrmActiveModel>>;
     type SeaOrmActiveModel: ActiveModelTrait<Entity = Self::SeaOrmEntity>
         + sea_orm::ActiveModelBehavior
         + Send;
 
-    /// Returns the underlying database connection.
-    /// For transaction-aware operations, the concrete repository
-    /// implementation handles routing to the active transaction internally.
-    fn get_db(&self) -> &DatabaseConnection;
-
     /// Convert a batch of SeaORM models into domain entities.
-    ///
-    /// This is a batch operation so that related data (e.g., tags) can be
-    /// loaded in a single query rather than N+1 per-entity queries.
     async fn convert_to_entities(
         &self,
+        sess: &SeaOrmSession,
         models: Vec<<Self::SeaOrmEntity as EntityTrait>::Model>,
     ) -> Result<Vec<Self::Entity>>;
 
@@ -44,6 +133,7 @@ pub trait SeaOrmReadRepository<S: Specification>: ReadRepository<S> {
 
     async fn __find_all_by_ids(
         &self,
+        sess: &SeaOrmSession,
         ids: &[Id<Self::Entity>],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         if ids.is_empty() {
@@ -51,18 +141,18 @@ pub trait SeaOrmReadRepository<S: Specification>: ReadRepository<S> {
         }
 
         let values: Vec<sea_orm::Value> = ids.iter().map(|id| self.id_to_value(id)).collect();
-        let models = Self::SeaOrmEntity::find()
-            .filter(self.pk_column().is_in(values))
-            .all(self.get_db())
+        let models = sess
+            .query_all(Self::SeaOrmEntity::find().filter(self.pk_column().is_in(values)))
             .await
             .map_err(shared::ErrorKind::internal)?;
 
-        let entities = self.convert_to_entities(models).await?;
+        let entities = self.convert_to_entities(sess, models).await?;
         Ok(entities.into_iter().map(|e| (e.id().clone(), e)).collect())
     }
 
     async fn __find_all(
         &self,
+        sess: &SeaOrmSession,
         spec: &S,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
@@ -72,52 +162,50 @@ pub trait SeaOrmReadRepository<S: Specification>: ReadRepository<S> {
             query = query.limit(limit as u64);
         }
 
-        let models = query
-            .all(self.get_db())
+        let models = sess
+            .query_all(query)
             .await
             .map_err(shared::ErrorKind::internal)?;
 
-        let entities = self.convert_to_entities(models).await?;
+        let entities = self.convert_to_entities(sess, models).await?;
         Ok(entities.into_iter().map(|e| (e.id().clone(), e)).collect())
     }
 }
 
-/// Bridge trait for write operations.
+// ── SeaOrmWriteRepository ────────────────────────────────────────
+
 #[async_trait::async_trait]
 pub trait SeaOrmWriteRepository<S: Specification>: SeaOrmReadRepository<S> {
-    /// Called after saving the main entity to handle related data (e.g., tags).
-    /// Default: no-op.
-    async fn save_related(
+    /// Called after saving main entities to handle related data in batch.
+    async fn save_all_related(
         &self,
-        _entity: &Self::Entity,
+        _sess: &SeaOrmSession,
+        _entities: &[Self::Entity],
     ) -> std::result::Result<(), sea_orm::DbErr> {
         Ok(())
     }
 
-    /// Called before deleting the main entity to clean up related data.
-    /// Default: no-op.
-    async fn delete_related(
+    /// Called before deleting main entities to clean up related data in batch.
+    async fn delete_all_related(
         &self,
-        _id: &Id<Self::Entity>,
+        _sess: &SeaOrmSession,
+        _ids: &[Id<Self::Entity>],
     ) -> std::result::Result<(), sea_orm::DbErr> {
         Ok(())
     }
 
     async fn __save_all(
-        &mut self,
+        &self,
+        sess: &mut SeaOrmSession,
         entities: &[Self::Entity],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         if entities.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let db = self.get_db();
-
-        // Determine which entities already exist
         let ids: Vec<_> = entities.iter().map(|e| e.id().clone()).collect();
-        let existing = self.__find_all_by_ids(&ids).await?;
+        let existing = self.__find_all_by_ids(sess, &ids).await?;
 
-        // Separate into updates and inserts
         let mut to_update = Vec::new();
         let mut to_insert = Vec::new();
         for entity in entities {
@@ -128,85 +216,69 @@ pub trait SeaOrmWriteRepository<S: Specification>: SeaOrmReadRepository<S> {
             }
         }
 
-        // Phase 1: For existing rows, first clear unique-constrained columns
-        // to temporary values so that swaps don't violate constraints.
-        // Then apply the final values.
         if !to_update.is_empty() {
-            // 1a. Set unique columns to temporary values (UUID-based)
+            // Phase 1a: Temp values for unique columns (swap support)
             for entity in &to_update {
                 let temp_model = self.convert_to_temp_active_model(entity);
-                temp_model
-                    .update(db)
+                sess.exec_update(temp_model)
                     .await
                     .map_err(shared::ErrorKind::internal)?;
             }
-            // 1b. Set final values
+            // Phase 1b: Final values
             for entity in &to_update {
                 let active_model = self.convert_to_active_model(entity);
-                active_model
-                    .update(db)
-                    .await
-                    .map_err(shared::ErrorKind::internal)?;
-                self.save_related(entity)
+                sess.exec_update(active_model)
                     .await
                     .map_err(shared::ErrorKind::internal)?;
             }
+            let updated: Vec<_> = to_update.iter().map(|&e| e.clone()).collect();
+            self.save_all_related(sess, &updated)
+                .await
+                .map_err(shared::ErrorKind::internal)?;
         }
 
         // Phase 2: Insert new rows
         for entity in &to_insert {
             let active_model = self.convert_to_active_model(entity);
-            Self::SeaOrmEntity::insert(active_model)
-                .exec(db)
+            sess.exec_insert(Self::SeaOrmEntity::insert(active_model))
                 .await
                 .map_err(shared::ErrorKind::internal)?;
-            self.save_related(entity)
+        }
+        if !to_insert.is_empty() {
+            let inserted: Vec<_> = to_insert.iter().map(|&e| e.clone()).collect();
+            self.save_all_related(sess, &inserted)
                 .await
                 .map_err(shared::ErrorKind::internal)?;
         }
 
-        // Re-fetch all saved entities
-        self.__find_all_by_ids(&ids).await
+        self.__find_all_by_ids(sess, &ids).await
     }
 
     async fn __delete_all_by_ids(
-        &mut self,
+        &self,
+        sess: &mut SeaOrmSession,
         ids: &[Id<Self::Entity>],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         if ids.is_empty() {
             return Ok(HashMap::new());
         }
 
-        // First fetch the entities to return them
-        let existing = self.__find_all_by_ids(ids).await?;
+        let existing = self.__find_all_by_ids(sess, ids).await?;
 
-        // Delete related data first
-        for id in ids {
-            self.delete_related(id)
-                .await
-                .map_err(shared::ErrorKind::internal)?;
-        }
+        self.delete_all_related(sess, ids)
+            .await
+            .map_err(shared::ErrorKind::internal)?;
 
-        // Delete the main entities
         let values: Vec<sea_orm::Value> = ids.iter().map(|id| self.id_to_value(id)).collect();
-        Self::SeaOrmEntity::delete_many()
-            .filter(self.pk_column().is_in(values))
-            .exec(self.get_db())
+        sess.exec_delete(Self::SeaOrmEntity::delete_many().filter(self.pk_column().is_in(values)))
             .await
             .map_err(shared::ErrorKind::internal)?;
 
         Ok(existing)
     }
 
-    /// Columns to update on conflict (upsert). Override per entity.
     fn updatable_columns(&self) -> Vec<<Self::SeaOrmEntity as EntityTrait>::Column>;
 
-    /// Create an active model with unique-constrained columns set to temporary
-    /// UUID values. Used during batch updates to avoid unique constraint
-    /// violations when swapping values (e.g., renaming A→"Beta", B→"Alpha").
-    ///
-    /// Default: same as `convert_to_active_model` (no unique columns to clear).
-    /// Override if your entity has unique columns besides the primary key.
     fn convert_to_temp_active_model(&self, entity: &Self::Entity) -> Self::SeaOrmActiveModel {
         self.convert_to_active_model(entity)
     }

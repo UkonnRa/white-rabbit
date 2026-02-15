@@ -2,7 +2,9 @@
 mod test;
 
 use chrono::{DateTime, Utc};
-use database_inmemory::repository::{InMemoryReadRepository, InMemoryWriteRepository};
+use database_inmemory::repository::{
+    InMemoryReadRepository, InMemorySession, InMemoryWriteRepository,
+};
 use domain::journal::repository::JournalRepository;
 use domain::journal::specification::{JournalSpec, JournalSpecification};
 use domain::journal::{Journal, JournalId};
@@ -39,13 +41,10 @@ impl Persistence for JournalPo {
     }
 }
 
-// ── In-Memory Repository ─────────────────────────────────────────
+// ── Stateless Repository ─────────────────────────────────────────
 
 #[derive(Default)]
-pub struct InMemoryJournalRepository {
-    storage: HashMap<String, JournalPo>,
-    snapshot: Option<HashMap<String, JournalPo>>,
-}
+pub struct InMemoryJournalRepository;
 
 impl InMemoryJournalRepository {
     fn satisfies_leaf(&self, po: &JournalPo, spec: &JournalSpecification) -> bool {
@@ -73,14 +72,6 @@ impl InMemoryReadRepository<JournalSpec> for InMemoryJournalRepository {
 
     fn satisfies(&self, po: &JournalPo, spec: &JournalSpec) -> bool {
         spec.evaluate(&|leaf| self.satisfies_leaf(po, leaf))
-    }
-
-    fn get_storage(&self) -> &HashMap<String, JournalPo> {
-        &self.storage
-    }
-
-    fn get_storage_mut(&mut self) -> &mut HashMap<String, JournalPo> {
-        &mut self.storage
     }
 
     fn convert_to_entity(&self, po: JournalPo) -> Journal {
@@ -117,59 +108,46 @@ impl InMemoryReadRepository<JournalSpec> for InMemoryJournalRepository {
 #[async_trait::async_trait]
 impl ReadRepository<JournalSpec> for InMemoryJournalRepository {
     type Entity = Journal;
+    type Session = InMemorySession<JournalPo>;
 
-    async fn find_all_by_ids(&self, ids: &[Id<Journal>]) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__find_all_by_ids(ids).await
+    async fn find_all_by_ids(
+        &self,
+        sess: &Self::Session,
+        ids: &[Id<Journal>],
+    ) -> Result<HashMap<Id<Journal>, Journal>> {
+        self.__find_all_by_ids(sess, ids).await
     }
 
     async fn find_all(
         &self,
+        sess: &Self::Session,
         spec: &JournalSpec,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__find_all(spec, limit).await
+        self.__find_all(sess, spec, limit).await
     }
 }
 
 #[async_trait::async_trait]
 impl WriteRepository<JournalSpec> for InMemoryJournalRepository {
-    async fn begin(&mut self) -> Result<()> {
-        self.__begin().await
-    }
-
-    async fn commit(&mut self) -> Result<()> {
-        self.__commit().await
-    }
-
-    async fn rollback(&mut self) -> Result<()> {
-        self.__rollback().await
-    }
-
-    async fn save_all(&mut self, entities: &[Journal]) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__save_all(entities).await
+    async fn save_all(
+        &self,
+        sess: &mut Self::Session,
+        entities: &[Journal],
+    ) -> Result<HashMap<Id<Journal>, Journal>> {
+        self.__save_all(sess, entities).await
     }
 
     async fn delete_all_by_ids(
-        &mut self,
+        &self,
+        sess: &mut Self::Session,
         ids: &[Id<Journal>],
     ) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__delete_all_by_ids(ids).await
+        self.__delete_all_by_ids(sess, ids).await
     }
 }
 
 impl JournalRepository for InMemoryJournalRepository {}
 
 #[async_trait::async_trait]
-impl InMemoryWriteRepository<JournalSpec> for InMemoryJournalRepository {
-    fn get_snapshot(&self) -> &Option<HashMap<String, JournalPo>> {
-        &self.snapshot
-    }
-
-    fn set_snapshot(&mut self, snapshot: Option<HashMap<String, JournalPo>>) {
-        self.snapshot = snapshot;
-    }
-
-    fn set_storage(&mut self, storage: HashMap<String, JournalPo>) {
-        self.storage = storage;
-    }
-}
+impl InMemoryWriteRepository<JournalSpec> for InMemoryJournalRepository {}

@@ -3,13 +3,12 @@ use crate::journal::repository::JournalRepository;
 use crate::journal::specification::JournalSpecification;
 use crate::journal::{JournalId, JournalInput};
 use crate::{error::Result, journal::Journal};
-use shared::ErrorKind;
+use shared::{ErrorKind, RepositorySession};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub struct JournalService<R: JournalRepository> {
-    pub repository: Arc<Mutex<R>>,
+    pub repository: Arc<R>,
 }
 
 impl<R: JournalRepository> JournalService<R> {
@@ -33,10 +32,10 @@ impl<R: JournalRepository> JournalService<R> {
     ///   — a name is empty or blank.
     pub async fn create(
         &self,
+        sess: &mut R::Session,
         commands: impl IntoIterator<Item = JournalCommandCreate>,
     ) -> Result<Vec<Journal>> {
-        let mut repo = self.repository.lock().await;
-        Self::do_create(&mut *repo, commands.into_iter().collect()).await
+        Self::do_create(&self.repository, sess, commands.into_iter().collect()).await
     }
 
     /// Update existing [`Journal`]s in a batch.
@@ -78,10 +77,10 @@ impl<R: JournalRepository> JournalService<R> {
     ///   — a name is empty or blank.
     pub async fn update(
         &self,
+        sess: &mut R::Session,
         commands: impl IntoIterator<Item = JournalCommandUpdate>,
     ) -> Result<Vec<Journal>> {
-        let mut repo = self.repository.lock().await;
-        Self::do_update(&mut *repo, commands.into_iter().collect()).await
+        Self::do_update(&self.repository, sess, commands.into_iter().collect()).await
     }
 
     /// Delete [`Journal`]s by their IDs.
@@ -97,10 +96,15 @@ impl<R: JournalRepository> JournalService<R> {
     /// Only journals that actually existed are included.
     pub async fn delete(
         &self,
+        sess: &mut R::Session,
         ids: impl IntoIterator<Item = impl Into<JournalId>>,
     ) -> Result<Vec<Journal>> {
-        let mut repo = self.repository.lock().await;
-        Self::do_delete(&mut *repo, ids.into_iter().map(Into::into).collect()).await
+        Self::do_delete(
+            &self.repository,
+            sess,
+            ids.into_iter().map(Into::into).collect(),
+        )
+        .await
     }
 
     /// Execute a batch of create, update, and delete operations atomically.
@@ -119,31 +123,36 @@ impl<R: JournalRepository> JournalService<R> {
     /// and updated journals, deduplicated by ID (if a journal is created then
     /// updated in the same batch, only the final state is returned).
     /// Deleted journals are not included.
-    pub async fn batch(&self, command: JournalCommandBatch) -> Result<Vec<Journal>> {
-        let mut repo = self.repository.lock().await;
-        repo.begin().await.map_err(|e| e.convert())?;
+    pub async fn batch(
+        &self,
+        sess: &mut R::Session,
+        command: JournalCommandBatch,
+    ) -> Result<Vec<Journal>> {
+        sess.begin().await.map_err(|e| e.convert())?;
 
-        let result = Self::do_batch(&mut *repo, command).await;
+        let result = Self::do_batch(&self.repository, sess, command).await;
 
         match result {
             Ok(v) => {
-                repo.commit().await.map_err(|e| e.convert())?;
+                sess.commit().await.map_err(|e| e.convert())?;
                 Ok(v)
             }
             Err(e) => {
-                // Best-effort rollback — if rollback itself fails, return original error
-                let _ = repo.rollback().await;
+                let _ = sess.rollback().await;
                 Err(e)
             }
         }
     }
 
-    async fn do_batch(repo: &mut R, command: JournalCommandBatch) -> Result<Vec<Journal>> {
-        Self::do_delete(repo, command.delete).await?;
-        let created = Self::do_create(repo, command.create).await?;
-        let updated = Self::do_update(repo, command.update).await?;
+    async fn do_batch(
+        repo: &R,
+        sess: &mut R::Session,
+        command: JournalCommandBatch,
+    ) -> Result<Vec<Journal>> {
+        Self::do_delete(repo, sess, command.delete).await?;
+        let created = Self::do_create(repo, sess, command.create).await?;
+        let updated = Self::do_update(repo, sess, command.update).await?;
 
-        // Deduplicate by ID — updated version wins over created version
         let mut result: HashMap<_, _> = created.into_iter().map(|j| (j.id.clone(), j)).collect();
         for j in updated {
             result.insert(j.id.clone(), j);
@@ -152,10 +161,13 @@ impl<R: JournalRepository> JournalService<R> {
         Ok(result.into_values().collect())
     }
 
-    // ── Internal implementations (operate on an already-locked repo) ──
+    // ── Internal implementations ─────────────────────────────────
 
-    async fn do_create(repo: &mut R, commands: Vec<JournalCommandCreate>) -> Result<Vec<Journal>> {
-        // 1. Reject duplicate names within the batch
+    async fn do_create(
+        repo: &R,
+        sess: &mut R::Session,
+        commands: Vec<JournalCommandCreate>,
+    ) -> Result<Vec<Journal>> {
         let mut seen_names = HashSet::new();
         for cmd in &commands {
             if !seen_names.insert(&cmd.name) {
@@ -166,16 +178,14 @@ impl<R: JournalRepository> JournalService<R> {
             }
         }
 
-        // 2. Reject names that already exist in the repository
         let spec = JournalSpecification::names(seen_names.iter().copied());
-        if let Some(existing) = repo.find_one(&spec).await.map_err(|e| e.convert())? {
+        if let Some(existing) = repo.find_one(sess, &spec).await.map_err(|e| e.convert())? {
             return Err(ErrorKind::duplicate_values(&existing.name)
                 .with_resource_type(Journal::TYPE)
                 .with_field("name")
                 .convert());
         }
 
-        // 3. Convert to domain entities and persist
         let journals = commands
             .into_iter()
             .map(|cmd| {
@@ -189,12 +199,18 @@ impl<R: JournalRepository> JournalService<R> {
             })
             .collect::<Result<Vec<Journal>>>()?;
 
-        let saved = repo.save_all(&journals).await.map_err(|e| e.convert())?;
+        let saved = repo
+            .save_all(sess, &journals)
+            .await
+            .map_err(|e| e.convert())?;
         Ok(saved.into_values().collect())
     }
 
-    async fn do_update(repo: &mut R, commands: Vec<JournalCommandUpdate>) -> Result<Vec<Journal>> {
-        // 1. Reject duplicate IDs within the batch
+    async fn do_update(
+        repo: &R,
+        sess: &mut R::Session,
+        commands: Vec<JournalCommandUpdate>,
+    ) -> Result<Vec<Journal>> {
         let batch_ids: HashSet<_> = commands.iter().map(|cmd| &cmd.id).collect();
         if batch_ids.len() != commands.len() {
             return Err(ErrorKind::duplicate_values("id")
@@ -203,10 +219,9 @@ impl<R: JournalRepository> JournalService<R> {
                 .convert());
         }
 
-        // 2. Fetch existing journals by ID
         let id_vec: Vec<_> = commands.iter().map(|cmd| cmd.id.clone()).collect();
         let existing = repo
-            .find_all_by_ids(&id_vec)
+            .find_all_by_ids(sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -220,7 +235,6 @@ impl<R: JournalRepository> JournalService<R> {
             }
         }
 
-        // 3. Reject duplicate new names within the batch
         let mut new_names = HashSet::new();
         for cmd in &commands {
             if !new_names.insert(&cmd.name) {
@@ -231,9 +245,11 @@ impl<R: JournalRepository> JournalService<R> {
             }
         }
 
-        // 4. Check new names against existing journals NOT in this batch
         let spec = JournalSpecification::names(new_names.iter().copied());
-        let conflicts = repo.find_all(&spec, None).await.map_err(|e| e.convert())?;
+        let conflicts = repo
+            .find_all(sess, &spec, None)
+            .await
+            .map_err(|e| e.convert())?;
 
         for (conflict_id, conflict) in &conflicts {
             if !batch_ids.contains(conflict_id) {
@@ -244,7 +260,6 @@ impl<R: JournalRepository> JournalService<R> {
             }
         }
 
-        // 5. Apply updates and persist
         let commands_by_id: HashMap<_, _> = commands
             .into_iter()
             .map(|cmd| (cmd.id.clone(), cmd))
@@ -279,14 +294,21 @@ impl<R: JournalRepository> JournalService<R> {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let saved = repo.save_all(&journals).await.map_err(|e| e.convert())?;
+        let saved = repo
+            .save_all(sess, &journals)
+            .await
+            .map_err(|e| e.convert())?;
         Ok(saved.into_values().collect())
     }
 
-    async fn do_delete(repo: &mut R, ids: HashSet<JournalId>) -> Result<Vec<Journal>> {
+    async fn do_delete(
+        repo: &R,
+        sess: &mut R::Session,
+        ids: HashSet<JournalId>,
+    ) -> Result<Vec<Journal>> {
         let ids: Vec<_> = ids.into_iter().collect();
         let deleted = repo
-            .delete_all_by_ids(&ids)
+            .delete_all_by_ids(sess, &ids)
             .await
             .map_err(|e| e.convert())?;
         Ok(deleted.into_values().collect())

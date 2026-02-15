@@ -1,15 +1,51 @@
-use shared::{Entity, EntityId, Id, Persistence, ReadRepository, Result, Specification};
+use shared::{
+    Entity, EntityId, Id, Persistence, ReadRepository, RepositorySession, Result, Specification,
+};
 use std::collections::HashMap;
 
+/// In-memory session holding the storage HashMap and optional snapshot for
+/// transaction support.
+pub struct InMemorySession<P: Persistence> {
+    pub storage: HashMap<String, P>,
+    snapshot: Option<HashMap<String, P>>,
+}
+
+impl<P: Persistence> Default for InMemorySession<P> {
+    fn default() -> Self {
+        Self {
+            storage: HashMap::new(),
+            snapshot: None,
+        }
+    }
+}
+
 #[async_trait::async_trait]
-pub trait InMemoryReadRepository<S: Specification>: ReadRepository<S> {
+impl<P: Persistence> RepositorySession for InMemorySession<P> {
+    async fn begin(&mut self) -> Result<()> {
+        self.snapshot = Some(self.storage.clone());
+        Ok(())
+    }
+
+    async fn commit(&mut self) -> Result<()> {
+        self.snapshot = None;
+        Ok(())
+    }
+
+    async fn rollback(&mut self) -> Result<()> {
+        if let Some(snapshot) = self.snapshot.take() {
+            self.storage = snapshot;
+        }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+pub trait InMemoryReadRepository<S: Specification>:
+    ReadRepository<S, Session = InMemorySession<Self::Persistence>>
+{
     type Persistence: Persistence;
 
     fn satisfies(&self, persistence: &Self::Persistence, specification: &S) -> bool;
-
-    fn get_storage(&self) -> &HashMap<String, Self::Persistence>;
-
-    fn get_storage_mut(&mut self) -> &mut HashMap<String, Self::Persistence>;
 
     fn convert_to_entity(&self, persistence: Self::Persistence) -> Self::Entity;
 
@@ -17,13 +53,13 @@ pub trait InMemoryReadRepository<S: Specification>: ReadRepository<S> {
 
     async fn __find_all_by_ids(
         &self,
+        sess: &InMemorySession<Self::Persistence>,
         ids: &[Id<Self::Entity>],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
-        let storage = self.get_storage();
         Ok(ids
             .iter()
             .filter_map(|id| {
-                storage.get(id.value()).cloned().map(|po| {
+                sess.storage.get(id.value()).cloned().map(|po| {
                     let entity = self.convert_to_entity(po);
                     (entity.id().clone(), entity)
                 })
@@ -33,11 +69,12 @@ pub trait InMemoryReadRepository<S: Specification>: ReadRepository<S> {
 
     async fn __find_all(
         &self,
+        sess: &InMemorySession<Self::Persistence>,
         spec: &S,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
-        Ok(self
-            .get_storage()
+        Ok(sess
+            .storage
             .values()
             .filter_map(|po| {
                 if self.satisfies(po, spec) {
@@ -54,46 +91,15 @@ pub trait InMemoryReadRepository<S: Specification>: ReadRepository<S> {
 
 #[async_trait::async_trait]
 pub trait InMemoryWriteRepository<S: Specification>: InMemoryReadRepository<S> {
-    /// Access the snapshot slot for transaction support.
-    fn get_snapshot(&self) -> &Option<HashMap<String, Self::Persistence>>;
-
-    /// Set/clear the snapshot slot.
-    fn set_snapshot(&mut self, snapshot: Option<HashMap<String, Self::Persistence>>);
-
-    /// Replace the entire storage (used by rollback).
-    fn set_storage(&mut self, storage: HashMap<String, Self::Persistence>);
-
-    // ── Transaction support ──────────────────────────────────────
-
-    async fn __begin(&mut self) -> Result<()> {
-        self.set_snapshot(Some(self.get_storage().clone()));
-        Ok(())
-    }
-
-    async fn __commit(&mut self) -> Result<()> {
-        self.set_snapshot(None);
-        Ok(())
-    }
-
-    async fn __rollback(&mut self) -> Result<()> {
-        if let Some(snapshot) = self.get_snapshot().clone() {
-            self.set_storage(snapshot);
-            self.set_snapshot(None);
-        }
-        Ok(())
-    }
-
-    // ── CRUD support ─────────────────────────────────────────────
-
     async fn __save_all(
-        &mut self,
+        &self,
+        sess: &mut InMemorySession<Self::Persistence>,
         entities: &[Self::Entity],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         let mut saved: HashMap<Id<Self::Entity>, Self::Entity> = HashMap::new();
         for entity in entities {
             let po = self.convert_to_persistence(entity);
-            self.get_storage_mut()
-                .insert(po.id().value().to_string(), po.clone());
+            sess.storage.insert(po.id().value().to_string(), po.clone());
             let entity = self.convert_to_entity(po);
             saved.insert(entity.id().clone(), entity);
         }
@@ -101,17 +107,17 @@ pub trait InMemoryWriteRepository<S: Specification>: InMemoryReadRepository<S> {
     }
 
     async fn __delete_all_by_ids(
-        &mut self,
+        &self,
+        sess: &mut InMemorySession<Self::Persistence>,
         ids: &[Id<Self::Entity>],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
-        let mut deleted_pos: HashMap<Id<Self::Entity>, Self::Entity> = HashMap::new();
+        let mut deleted: HashMap<Id<Self::Entity>, Self::Entity> = HashMap::new();
         for id in ids {
-            let storage = self.get_storage_mut();
-            if let Some(po) = storage.remove(id.value()) {
+            if let Some(po) = sess.storage.remove(id.value()) {
                 let entity = self.convert_to_entity(po);
-                deleted_pos.insert(entity.id().clone(), entity);
+                deleted.insert(entity.id().clone(), entity);
             }
         }
-        Ok(deleted_pos)
+        Ok(deleted)
     }
 }

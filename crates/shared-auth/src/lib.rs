@@ -4,4 +4,4 @@ mod service;
 
 pub use entity::AuthEntity;
 pub use permission::Permission;
-pub use service::{AuthReadService, AuthWriteService};
+pub use service::AuthReadService;

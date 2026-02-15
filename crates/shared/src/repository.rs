@@ -5,42 +5,14 @@ use crate::specification::Specification;
 use std::array;
 use std::collections::HashMap;
 
+/// A session that holds the connection/storage state for repository operations.
+///
+/// Transaction control (`begin`/`commit`/`rollback`) lives here, not on the
+/// repository itself. The repository is stateless; the session carries state.
 #[async_trait::async_trait]
-pub trait ReadRepository<S: Specification>: Send + Sync {
-    type Entity: Entity;
-
-    /// Find an entity by its ID
-    async fn find_one_by_id(&self, id: &Id<Self::Entity>) -> Result<Option<Self::Entity>> {
-        Ok(self
-            .find_all_by_ids(array::from_ref(id))
-            .await?
-            .get(id)
-            .cloned())
-    }
-
-    /// Find all entities matching the given IDs
-    async fn find_all_by_ids(
-        &self,
-        ids: &[Id<Self::Entity>],
-    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
-
-    /// Find the first entity matching the specification
-    async fn find_one(&self, spec: &S) -> Result<Option<Self::Entity>> {
-        Ok(self.find_all(spec, Some(1)).await?.values().next().cloned())
-    }
-
-    /// Find all entities matching the specification with optional limit
-    async fn find_all(
-        &self,
-        spec: &S,
-        limit: Option<usize>,
-    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
-}
-
-#[async_trait::async_trait]
-pub trait WriteRepository<S: Specification>: ReadRepository<S> {
+pub trait RepositorySession: Send + Sync {
     /// Begin a transaction. Subsequent reads and writes operate within it.
-    /// Default: no-op (for backends without transaction support).
+    /// Default: no-op.
     async fn begin(&mut self) -> Result<()> {
         Ok(())
     }
@@ -56,16 +28,64 @@ pub trait WriteRepository<S: Specification>: ReadRepository<S> {
     async fn rollback(&mut self) -> Result<()> {
         Ok(())
     }
+}
 
+#[async_trait::async_trait]
+pub trait ReadRepository<S: Specification>: Send + Sync {
+    type Entity: Entity;
+    type Session: RepositorySession;
+
+    /// Find an entity by its ID
+    async fn find_one_by_id(
+        &self,
+        sess: &Self::Session,
+        id: &Id<Self::Entity>,
+    ) -> Result<Option<Self::Entity>> {
+        Ok(self
+            .find_all_by_ids(sess, array::from_ref(id))
+            .await?
+            .get(id)
+            .cloned())
+    }
+
+    /// Find all entities matching the given IDs
+    async fn find_all_by_ids(
+        &self,
+        sess: &Self::Session,
+        ids: &[Id<Self::Entity>],
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
+
+    /// Find the first entity matching the specification
+    async fn find_one(&self, sess: &Self::Session, spec: &S) -> Result<Option<Self::Entity>> {
+        Ok(self
+            .find_all(sess, spec, Some(1))
+            .await?
+            .values()
+            .next()
+            .cloned())
+    }
+
+    /// Find all entities matching the specification with optional limit
+    async fn find_all(
+        &self,
+        sess: &Self::Session,
+        spec: &S,
+        limit: Option<usize>,
+    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
+}
+
+#[async_trait::async_trait]
+pub trait WriteRepository<S: Specification>: ReadRepository<S> {
     /// Save all entities and return the saved entities
     async fn save_all(
-        &mut self,
+        &self,
+        sess: &mut Self::Session,
         entities: &[Self::Entity],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
     /// Save a single entity and return the saved entity
-    async fn save(&mut self, entity: &Self::Entity) -> Result<Self::Entity> {
-        self.save_all(array::from_ref(entity))
+    async fn save(&self, sess: &mut Self::Session, entity: &Self::Entity) -> Result<Self::Entity> {
+        self.save_all(sess, array::from_ref(entity))
             .await?
             .into_values()
             .next()
@@ -74,14 +94,19 @@ pub trait WriteRepository<S: Specification>: ReadRepository<S> {
 
     /// Delete entities by their IDs and return the deleted entities
     async fn delete_all_by_ids(
-        &mut self,
+        &self,
+        sess: &mut Self::Session,
         ids: &[Id<Self::Entity>],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
     /// Delete a single entity by ID and return it
-    async fn delete(&mut self, id: &Id<Self::Entity>) -> Result<Option<Self::Entity>> {
+    async fn delete(
+        &self,
+        sess: &mut Self::Session,
+        id: &Id<Self::Entity>,
+    ) -> Result<Option<Self::Entity>> {
         Ok(self
-            .delete_all_by_ids(array::from_ref(id))
+            .delete_all_by_ids(sess, array::from_ref(id))
             .await?
             .into_values()
             .next())
@@ -89,10 +114,11 @@ pub trait WriteRepository<S: Specification>: ReadRepository<S> {
 
     /// Delete all given entities and return the deleted entities
     async fn delete_all(
-        &mut self,
+        &self,
+        sess: &mut Self::Session,
         entities: &[Self::Entity],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
         let ids: Vec<_> = entities.iter().map(|e| e.id().clone()).collect();
-        self.delete_all_by_ids(&ids).await
+        self.delete_all_by_ids(sess, &ids).await
     }
 }

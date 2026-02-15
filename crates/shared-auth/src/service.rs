@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::entity::AuthEntity;
 use crate::permission::Permission;
-use shared::{Command, Entity, Id, ReadService, Result, Specification, WriteService};
+use shared::{Entity, Id, ReadService, Result, Specification};
 
 #[async_trait::async_trait]
 pub trait AuthReadService<S: Specification>: ReadService<S> {
@@ -33,10 +33,4 @@ pub trait AuthReadService<S: Specification>: ReadService<S> {
             })
             .collect())
     }
-}
-
-#[async_trait::async_trait]
-pub trait AuthWriteService<S: Specification, C: Command>:
-    WriteService<S, C> + AuthReadService<S>
-{
 }

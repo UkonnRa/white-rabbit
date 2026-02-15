@@ -15,8 +15,8 @@ pub use error::{
 };
 pub use id::{EntityId, Id};
 pub use persistence::Persistence;
-pub use repository::{ReadRepository, WriteRepository};
-pub use service::{ReadService, WriteService};
+pub use repository::{ReadRepository, RepositorySession, WriteRepository};
+pub use service::ReadService;
 pub use shared_derive::DomainModel;
 pub use specification::{Specification, SpecificationExpression};
 pub use r#type::{NonEmpty, NonNegative};
