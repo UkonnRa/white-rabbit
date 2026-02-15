@@ -58,18 +58,15 @@ pub trait InMemoryWriteRepository<S: Specification>: InMemoryReadRepository<S> {
         &mut self,
         entities: &[Self::Entity],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
-        let mut saved_pos: HashMap<Id<Self::Entity>, Self::Entity> = HashMap::new();
+        let mut saved: HashMap<Id<Self::Entity>, Self::Entity> = HashMap::new();
         for entity in entities {
             let po = self.convert_to_persistence(entity);
-            if let Some(po) = self
-                .get_storage_mut()
-                .insert(po.id().value().to_string(), po.clone())
-            {
-                let entity = self.convert_to_entity(po);
-                saved_pos.insert(entity.id().clone(), entity);
-            }
+            self.get_storage_mut()
+                .insert(po.id().value().to_string(), po.clone());
+            let entity = self.convert_to_entity(po);
+            saved.insert(entity.id().clone(), entity);
         }
-        Ok(saved_pos)
+        Ok(saved)
     }
 
     async fn __delete_all_by_ids(

@@ -1,5 +1,5 @@
 use crate::entity::Entity;
-use crate::error::Result;
+use crate::error::{ErrorKind, Result};
 use crate::id::Id;
 use crate::specification::Specification;
 use std::array;
@@ -45,11 +45,29 @@ pub trait WriteRepository<S: Specification>: ReadRepository<S> {
         entities: &[Self::Entity],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
 
+    /// Save a single entity and return the saved entity
+    async fn save(&mut self, entity: &Self::Entity) -> Result<Self::Entity> {
+        self.save_all(array::from_ref(entity))
+            .await?
+            .into_values()
+            .next()
+            .ok_or_else(ErrorKind::not_found)
+    }
+
     /// Delete entities by their IDs and return the deleted entities
     async fn delete_all_by_ids(
         &mut self,
         ids: &[Id<Self::Entity>],
     ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
+
+    /// Delete a single entity by ID and return it
+    async fn delete(&mut self, id: &Id<Self::Entity>) -> Result<Option<Self::Entity>> {
+        Ok(self
+            .delete_all_by_ids(array::from_ref(id))
+            .await?
+            .into_values()
+            .next())
+    }
 
     /// Delete all given entities and return the deleted entities
     async fn delete_all(

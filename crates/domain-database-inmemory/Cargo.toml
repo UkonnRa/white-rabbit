@@ -1,21 +1,15 @@
 [package]
-name = "domain"
+name = "domain-database-inmemory"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
 [dependencies]
 shared = { path = "../shared" }
+domain = { path = "../domain" }
+database-inmemory = { path = "../database-inmemory" }
+async-trait.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 chrono.workspace = true
 anyhow.workspace = true
-thiserror.workspace = true
-async-trait.workspace = true
-rust_decimal.workspace = true
-strum.workspace = true
-itertools.workspace = true
-uuid.workspace = true
 tokio.workspace = true
-
-[dev-dependencies]

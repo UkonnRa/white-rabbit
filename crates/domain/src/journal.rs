@@ -1,6 +1,11 @@
 //! Journal is a collection of [`crate::account::Account`]
 
+pub mod command;
 mod input;
+pub mod repository;
+pub mod service;
+pub mod specification;
+
 #[cfg(test)]
 mod test;
 use std::collections::HashSet;

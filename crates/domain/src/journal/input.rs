@@ -16,7 +16,7 @@ pub struct JournalInput {
 
     pub name: String,
     pub description: String,
-    pub tags: Vec<String>,
+    pub tags: HashSet<String>,
 }
 
 impl TryFrom<JournalInput> for Journal {

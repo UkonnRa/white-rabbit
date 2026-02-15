@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use std::{ops::Deref, slice, str::FromStr};
+use std::{fmt, ops::Deref, slice, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NonEmpty<T>(T);
@@ -10,6 +10,12 @@ impl TryFrom<String> for NonEmpty<String> {
     type Error = Error;
     fn try_from(value: String) -> Result<Self> {
         value.parse()
+    }
+}
+
+impl fmt::Display for NonEmpty<String> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -79,6 +85,12 @@ impl TryFrom<Decimal> for NonNegative<Decimal> {
         } else {
             Ok(Self(value))
         }
+    }
+}
+
+impl fmt::Display for NonNegative<Decimal> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

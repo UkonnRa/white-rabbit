@@ -1,5 +1,5 @@
 use std::fmt::Debug;
 
 pub trait Command: Send + Sync + Debug {
-    fn command_type() -> &'static str;
+    fn command_type(&self) -> &'static str;
 }

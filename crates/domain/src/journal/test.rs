@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::error::ErrorKind;
 use shared::EntityId;
 
@@ -22,7 +24,7 @@ fn test_journal_input_with_tags() {
     let journal: Journal = JournalInput {
         id: JournalId::from_value("test-journal-id"),
         name: "Work Journal".to_string(),
-        tags: vec!["business".to_string(), "2024".to_string()],
+        tags: HashSet::from(["business".to_string(), "2024".to_string()]),
         ..Default::default()
     }
     .try_into()

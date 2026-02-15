@@ -1,39 +1,10 @@
 use std::collections::HashMap;
 
 use crate::error::ErrorKind;
-use crate::journal::{Journal, JournalId};
-use shared::{EntityId, NonEmpty};
+use crate::journal::{JournalId, JournalInput};
+use shared::EntityId;
 
 use super::{Account, AccountContext, AccountId, AccountInput, AccountType};
-
-fn make_account(id: &str, parent_id: Option<&str>, account_type: AccountType) -> Account {
-    Account {
-        id: AccountId::from_value(id),
-        version: 0,
-        created_at: None,
-        last_modified_at: None,
-        archived_at: None,
-        journal_id: JournalId::from_value("test-journal"),
-        parent_id: parent_id.map(AccountId::from_value),
-        r#type: account_type,
-        name: NonEmpty::try_from("test".to_string()).unwrap(),
-        description: String::new(),
-        tags: Default::default(),
-    }
-}
-
-fn make_journal() -> Journal {
-    Journal {
-        id: JournalId::from_value("test-journal"),
-        version: 0,
-        created_at: None,
-        last_modified_at: None,
-        archived_at: None,
-        name: NonEmpty::try_from("test".to_string()).unwrap(),
-        description: String::new(),
-        tags: Default::default(),
-    }
-}
 
 // ── Input tests ──────────────────────────────────────────────────
 
@@ -115,14 +86,42 @@ fn test_account_type_default_is_asset() {
 
 #[test]
 fn test_context_valid_three_level_chain() {
-    let root = make_account("root", None, AccountType::Asset);
-    let mid = make_account("mid", Some("root"), AccountType::Asset);
-    let leaf = make_account("leaf", Some("mid"), AccountType::Asset);
+    let root: Account = AccountInput {
+        id: AccountId::from_value("root"),
+        r#type: AccountType::Asset,
+        name: "root".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+    let mid: Account = AccountInput {
+        id: AccountId::from_value("mid"),
+        parent_id: Some(AccountId::from_value("root")),
+        r#type: AccountType::Asset,
+        name: "mid".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+    let leaf: Account = AccountInput {
+        id: AccountId::from_value("leaf"),
+        parent_id: Some(AccountId::from_value("mid")),
+        r#type: AccountType::Asset,
+        name: "leaf".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
 
     let accounts = HashMap::from([(root.id.clone(), root), (mid.id.clone(), mid)]);
     let ctx = AccountContext {
         entity: leaf,
-        journal: make_journal(),
+        journal: JournalInput {
+            name: "j".into(),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
         accounts,
     };
     ctx.validate().unwrap();
@@ -130,10 +129,23 @@ fn test_context_valid_three_level_chain() {
 
 #[test]
 fn test_context_root_account_no_parent_is_valid() {
-    let root = make_account("root", None, AccountType::Income);
+    let root: Account = AccountInput {
+        id: AccountId::from_value("root"),
+        r#type: AccountType::Income,
+        name: "root".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+
     let ctx = AccountContext {
         entity: root,
-        journal: make_journal(),
+        journal: JournalInput {
+            name: "j".into(),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
         accounts: HashMap::new(),
     };
     ctx.validate().unwrap();
@@ -141,13 +153,33 @@ fn test_context_root_account_no_parent_is_valid() {
 
 #[test]
 fn test_context_mismatch_immediate_parent() {
-    let root = make_account("root", None, AccountType::Asset);
-    let child = make_account("child", Some("root"), AccountType::Expense);
+    let root: Account = AccountInput {
+        id: AccountId::from_value("root"),
+        r#type: AccountType::Asset,
+        name: "root".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+    let child: Account = AccountInput {
+        id: AccountId::from_value("child"),
+        parent_id: Some(AccountId::from_value("root")),
+        r#type: AccountType::Expense,
+        name: "child".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
 
     let accounts = HashMap::from([(root.id.clone(), root)]);
     let ctx = AccountContext {
         entity: child,
-        journal: make_journal(),
+        journal: JournalInput {
+            name: "j".into(),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
         accounts,
     };
 
@@ -166,14 +198,42 @@ fn test_context_mismatch_immediate_parent() {
 
 #[test]
 fn test_context_mismatch_deep_in_chain() {
-    let root = make_account("root", None, AccountType::Asset);
-    let mid = make_account("mid", Some("root"), AccountType::Asset);
-    let leaf = make_account("leaf", Some("mid"), AccountType::Liability);
+    let root: Account = AccountInput {
+        id: AccountId::from_value("root"),
+        r#type: AccountType::Asset,
+        name: "root".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+    let mid: Account = AccountInput {
+        id: AccountId::from_value("mid"),
+        parent_id: Some(AccountId::from_value("root")),
+        r#type: AccountType::Asset,
+        name: "mid".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+    let leaf: Account = AccountInput {
+        id: AccountId::from_value("leaf"),
+        parent_id: Some(AccountId::from_value("mid")),
+        r#type: AccountType::Liability,
+        name: "leaf".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
 
     let accounts = HashMap::from([(root.id.clone(), root), (mid.id.clone(), mid)]);
     let ctx = AccountContext {
         entity: leaf,
-        journal: make_journal(),
+        journal: JournalInput {
+            name: "j".into(),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
         accounts,
     };
 
@@ -183,10 +243,24 @@ fn test_context_mismatch_deep_in_chain() {
 
 #[test]
 fn test_context_parent_not_found() {
-    let child = make_account("child", Some("nonexistent"), AccountType::Asset);
+    let child: Account = AccountInput {
+        id: AccountId::from_value("child"),
+        parent_id: Some(AccountId::from_value("nonexistent")),
+        r#type: AccountType::Asset,
+        name: "child".into(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+
     let ctx = AccountContext {
         entity: child,
-        journal: make_journal(),
+        journal: JournalInput {
+            name: "j".into(),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
         accounts: HashMap::new(),
     };
 
