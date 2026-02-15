@@ -110,14 +110,8 @@ impl<R: JournalRepository> JournalService<R> {
     /// - Deleted journals free their names for reuse by create/update.
     /// - Newly created journals are visible to the update name-conflict check.
     ///
-    /// All three phases run under a single lock, so the batch is atomic
-    /// with respect to concurrent callers.
-    ///
-    /// # Errors
-    ///
-    /// If any phase fails, the entire batch is aborted. Phases that already
-    /// mutated the in-memory state are **not** rolled back (eventual consistency
-    /// with a real database would use a transaction).
+    /// The entire batch is wrapped in a transaction: if any phase fails,
+    /// all mutations are rolled back.
     ///
     /// # Returns
     ///
@@ -127,10 +121,27 @@ impl<R: JournalRepository> JournalService<R> {
     /// Deleted journals are not included.
     pub async fn batch(&self, command: JournalCommandBatch) -> Result<Vec<Journal>> {
         let mut repo = self.repository.lock().await;
+        repo.begin().await.map_err(|e| e.convert())?;
 
-        Self::do_delete(&mut *repo, command.delete).await?;
-        let created = Self::do_create(&mut *repo, command.create).await?;
-        let updated = Self::do_update(&mut *repo, command.update).await?;
+        let result = Self::do_batch(&mut *repo, command).await;
+
+        match result {
+            Ok(v) => {
+                repo.commit().await.map_err(|e| e.convert())?;
+                Ok(v)
+            }
+            Err(e) => {
+                // Best-effort rollback — if rollback itself fails, return original error
+                let _ = repo.rollback().await;
+                Err(e)
+            }
+        }
+    }
+
+    async fn do_batch(repo: &mut R, command: JournalCommandBatch) -> Result<Vec<Journal>> {
+        Self::do_delete(repo, command.delete).await?;
+        let created = Self::do_create(repo, command.create).await?;
+        let updated = Self::do_update(repo, command.update).await?;
 
         // Deduplicate by ID — updated version wins over created version
         let mut result: HashMap<_, _> = created.into_iter().map(|j| (j.id.clone(), j)).collect();

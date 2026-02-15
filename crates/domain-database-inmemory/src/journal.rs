@@ -44,6 +44,7 @@ impl Persistence for JournalPo {
 #[derive(Default)]
 pub struct InMemoryJournalRepository {
     storage: HashMap<String, JournalPo>,
+    snapshot: Option<HashMap<String, JournalPo>>,
 }
 
 impl InMemoryJournalRepository {
@@ -132,6 +133,18 @@ impl ReadRepository<JournalSpec> for InMemoryJournalRepository {
 
 #[async_trait::async_trait]
 impl WriteRepository<JournalSpec> for InMemoryJournalRepository {
+    async fn begin(&mut self) -> Result<()> {
+        self.__begin().await
+    }
+
+    async fn commit(&mut self) -> Result<()> {
+        self.__commit().await
+    }
+
+    async fn rollback(&mut self) -> Result<()> {
+        self.__rollback().await
+    }
+
     async fn save_all(&mut self, entities: &[Journal]) -> Result<HashMap<Id<Journal>, Journal>> {
         self.__save_all(entities).await
     }
@@ -147,4 +160,16 @@ impl WriteRepository<JournalSpec> for InMemoryJournalRepository {
 impl JournalRepository for InMemoryJournalRepository {}
 
 #[async_trait::async_trait]
-impl InMemoryWriteRepository<JournalSpec> for InMemoryJournalRepository {}
+impl InMemoryWriteRepository<JournalSpec> for InMemoryJournalRepository {
+    fn get_snapshot(&self) -> &Option<HashMap<String, JournalPo>> {
+        &self.snapshot
+    }
+
+    fn set_snapshot(&mut self, snapshot: Option<HashMap<String, JournalPo>>) {
+        self.snapshot = snapshot;
+    }
+
+    fn set_storage(&mut self, storage: HashMap<String, JournalPo>) {
+        self.storage = storage;
+    }
+}

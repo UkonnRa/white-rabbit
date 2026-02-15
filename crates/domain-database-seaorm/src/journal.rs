@@ -6,25 +6,41 @@ pub mod tag_entity;
 
 use std::collections::{HashMap, HashSet};
 
-use database_seaorm::repository::{SeaOrmReadRepository, SeaOrmWriteRepository};
 use domain::journal::repository::JournalRepository;
 use domain::journal::specification::{JournalSpec, JournalSpecification};
 use domain::journal::{Journal, JournalId};
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, QueryTrait,
-    Set,
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    QueryFilter, QuerySelect, QueryTrait, Set, TransactionTrait,
 };
-use shared::{EntityId, Id, ReadRepository, Result, SpecificationExpression, WriteRepository};
+use shared::{
+    Entity, EntityId, Id, ReadRepository, Result, SpecificationExpression, WriteRepository,
+};
+
+/// Runs an async expression against either the transaction or the database connection.
+/// This avoids the need for `&dyn ConnectionTrait` (which is not dyn-compatible in SeaORM).
+macro_rules! with_conn {
+    ($self:expr, |$conn:ident| $body:expr) => {
+        match &$self.txn {
+            Some($conn) => $body,
+            None => {
+                let $conn = &$self.db;
+                $body
+            }
+        }
+    };
+}
 
 // ── Repository ───────────────────────────────────────────────────
 
 pub struct SeaOrmJournalRepository {
     db: DatabaseConnection,
+    txn: Option<DatabaseTransaction>,
 }
 
 impl SeaOrmJournalRepository {
     pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+        Self { db, txn: None }
     }
 
     fn spec_leaf_to_condition(&self, spec: &JournalSpecification) -> Condition {
@@ -55,7 +71,57 @@ impl SeaOrmJournalRepository {
         }
     }
 
-    /// Load tags for multiple journals in a single query.
+    fn spec_to_condition(&self, spec: &JournalSpec) -> Condition {
+        match spec {
+            SpecificationExpression::Leaf(leaf) => self.spec_leaf_to_condition(leaf),
+            SpecificationExpression::All(specs) => {
+                let mut cond = Condition::all();
+                for s in specs {
+                    cond = cond.add(self.spec_to_condition(s));
+                }
+                cond
+            }
+            SpecificationExpression::Any(specs) => {
+                let mut cond = Condition::any();
+                for s in specs {
+                    cond = cond.add(self.spec_to_condition(s));
+                }
+                cond
+            }
+            SpecificationExpression::Not(inner) => {
+                Condition::all().add(self.spec_to_condition(inner).not())
+            }
+        }
+    }
+
+    fn id_to_value(&self, id: &Id<Journal>) -> sea_orm::Value {
+        sea_orm::Value::from(id.value().to_string())
+    }
+
+    fn convert_to_active_model(&self, journal: &Journal) -> entity::ActiveModel {
+        entity::ActiveModel {
+            id: Set(journal.id.value().to_string()),
+            version: Set(journal.version as i32),
+            created_at: Set(journal.created_at),
+            last_modified_at: Set(journal.last_modified_at),
+            archived_at: Set(journal.archived_at),
+            name: Set(journal.name.to_string()),
+            description: Set(journal.description.clone()),
+        }
+    }
+
+    fn convert_to_temp_active_model(&self, journal: &Journal) -> entity::ActiveModel {
+        entity::ActiveModel {
+            id: Set(journal.id.value().to_string()),
+            version: Set(journal.version as i32),
+            created_at: Set(journal.created_at),
+            last_modified_at: Set(journal.last_modified_at),
+            archived_at: Set(journal.archived_at),
+            name: Set(format!("__temp__{}", uuid::Uuid::now_v7())),
+            description: Set(journal.description.clone()),
+        }
+    }
+
     async fn load_tags_batch(
         &self,
         journal_ids: &[String],
@@ -64,26 +130,19 @@ impl SeaOrmJournalRepository {
             return Ok(HashMap::new());
         }
 
-        let tags = tag_entity::Entity::find()
-            .filter(tag_entity::Column::JournalId.is_in(journal_ids.to_vec()))
-            .all(&self.db)
-            .await?;
+        let ids = journal_ids.to_vec();
+        let tags = with_conn!(self, |conn| {
+            tag_entity::Entity::find()
+                .filter(tag_entity::Column::JournalId.is_in(ids))
+                .all(conn)
+                .await?
+        });
 
         let mut result: HashMap<String, HashSet<String>> = HashMap::new();
         for tag in tags {
             result.entry(tag.journal_id).or_default().insert(tag.tag);
         }
         Ok(result)
-    }
-}
-
-#[async_trait::async_trait]
-impl SeaOrmReadRepository<JournalSpec> for SeaOrmJournalRepository {
-    type SeaOrmEntity = entity::Entity;
-    type SeaOrmActiveModel = entity::ActiveModel;
-
-    fn get_db(&self) -> &DatabaseConnection {
-        &self.db
     }
 
     async fn convert_to_entities(&self, models: Vec<entity::Model>) -> Result<Vec<Journal>> {
@@ -114,104 +173,147 @@ impl SeaOrmReadRepository<JournalSpec> for SeaOrmJournalRepository {
             .collect()
     }
 
-    fn convert_to_active_model(&self, entity: &Journal) -> entity::ActiveModel {
-        entity::ActiveModel {
-            id: Set(entity.id.value().to_string()),
-            version: Set(entity.version as i32),
-            created_at: Set(entity.created_at),
-            last_modified_at: Set(entity.last_modified_at),
-            archived_at: Set(entity.archived_at),
-            name: Set(entity.name.to_string()),
-            description: Set(entity.description.clone()),
+    async fn do_find_all_by_ids(
+        &self,
+        ids: &[Id<Journal>],
+    ) -> Result<HashMap<Id<Journal>, Journal>> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
         }
+        let values: Vec<sea_orm::Value> = ids.iter().map(|id| self.id_to_value(id)).collect();
+        let models = with_conn!(self, |conn| {
+            entity::Entity::find()
+                .filter(entity::Column::Id.is_in(values))
+                .all(conn)
+                .await
+                .map_err(shared::ErrorKind::internal)?
+        });
+        let entities = self.convert_to_entities(models).await?;
+        Ok(entities.into_iter().map(|e| (e.id().clone(), e)).collect())
     }
 
-    fn spec_to_condition(&self, spec: &JournalSpec) -> Condition {
-        match spec {
-            SpecificationExpression::Leaf(leaf) => self.spec_leaf_to_condition(leaf),
-            SpecificationExpression::All(specs) => {
-                let mut cond = Condition::all();
-                for s in specs {
-                    cond = cond.add(self.spec_to_condition(s));
-                }
-                cond
+    async fn do_find_all(
+        &self,
+        spec: &JournalSpec,
+        limit: Option<usize>,
+    ) -> Result<HashMap<Id<Journal>, Journal>> {
+        let condition = self.spec_to_condition(spec);
+        let mut query = entity::Entity::find().filter(condition);
+        if let Some(limit) = limit {
+            query = query.limit(limit as u64);
+        }
+        let models = with_conn!(self, |conn| {
+            query.all(conn).await.map_err(shared::ErrorKind::internal)?
+        });
+        let entities = self.convert_to_entities(models).await?;
+        Ok(entities.into_iter().map(|e| (e.id().clone(), e)).collect())
+    }
+
+    async fn save_tags(&self, journal: &Journal) -> std::result::Result<(), sea_orm::DbErr> {
+        let id = journal.id.value().to_string();
+        with_conn!(self, |conn| {
+            tag_entity::Entity::delete_many()
+                .filter(tag_entity::Column::JournalId.eq(&id))
+                .exec(conn)
+                .await?;
+
+            for tag in &journal.tags {
+                let tag_model = tag_entity::ActiveModel {
+                    journal_id: Set(id.clone()),
+                    tag: Set(tag.to_string()),
+                };
+                tag_entity::Entity::insert(tag_model).exec(conn).await?;
             }
-            SpecificationExpression::Any(specs) => {
-                let mut cond = Condition::any();
-                for s in specs {
-                    cond = cond.add(self.spec_to_condition(s));
-                }
-                cond
+            Ok(())
+        })
+    }
+
+    async fn do_save_all(&mut self, entities: &[Journal]) -> Result<HashMap<Id<Journal>, Journal>> {
+        if entities.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let ids: Vec<_> = entities.iter().map(|e| e.id().clone()).collect();
+        let existing = self.do_find_all_by_ids(&ids).await?;
+
+        let mut to_update = Vec::new();
+        let mut to_insert = Vec::new();
+        for entity in entities {
+            if existing.contains_key(&entity.id().clone()) {
+                to_update.push(entity);
+            } else {
+                to_insert.push(entity);
             }
-            SpecificationExpression::Not(inner) => {
-                Condition::all().add(self.spec_to_condition(inner).not())
+        }
+
+        // Phase 1: Update existing (temp names first for swap support)
+        if !to_update.is_empty() {
+            for e in &to_update {
+                let temp = self.convert_to_temp_active_model(e);
+                with_conn!(self, |conn| {
+                    temp.update(conn)
+                        .await
+                        .map_err(shared::ErrorKind::internal)?
+                });
+            }
+            for e in &to_update {
+                let am = self.convert_to_active_model(e);
+                with_conn!(self, |conn| {
+                    am.update(conn).await.map_err(shared::ErrorKind::internal)?
+                });
+                self.save_tags(e)
+                    .await
+                    .map_err(shared::ErrorKind::internal)?;
             }
         }
-    }
 
-    fn id_to_value(&self, id: &Id<Journal>) -> sea_orm::Value {
-        sea_orm::Value::from(id.value().to_string())
-    }
-
-    fn pk_column(&self) -> entity::Column {
-        entity::Column::Id
-    }
-}
-
-#[async_trait::async_trait]
-impl SeaOrmWriteRepository<JournalSpec> for SeaOrmJournalRepository {
-    async fn save_related(&self, entity: &Journal) -> std::result::Result<(), sea_orm::DbErr> {
-        let id = entity.id.value().to_string();
-
-        // Delete existing tags
-        tag_entity::Entity::delete_many()
-            .filter(tag_entity::Column::JournalId.eq(&id))
-            .exec(&self.db)
-            .await?;
-
-        // Insert new tags
-        for tag in &entity.tags {
-            let tag_model = tag_entity::ActiveModel {
-                journal_id: Set(id.clone()),
-                tag: Set(tag.to_string()),
-            };
-            tag_entity::Entity::insert(tag_model).exec(&self.db).await?;
+        // Phase 2: Insert new rows
+        for e in &to_insert {
+            let am = self.convert_to_active_model(e);
+            with_conn!(self, |conn| {
+                entity::Entity::insert(am)
+                    .exec(conn)
+                    .await
+                    .map_err(shared::ErrorKind::internal)?
+            });
+            self.save_tags(e)
+                .await
+                .map_err(shared::ErrorKind::internal)?;
         }
 
-        Ok(())
+        self.do_find_all_by_ids(&ids).await
     }
 
-    async fn delete_related(&self, id: &Id<Journal>) -> std::result::Result<(), sea_orm::DbErr> {
-        tag_entity::Entity::delete_many()
-            .filter(tag_entity::Column::JournalId.eq(id.value()))
-            .exec(&self.db)
-            .await?;
-        Ok(())
-    }
-
-    fn convert_to_temp_active_model(&self, entity: &Journal) -> entity::ActiveModel {
-        // Set name to a temporary UUID to avoid unique constraint violations
-        // during batch updates (e.g., name swaps).
-        entity::ActiveModel {
-            id: Set(entity.id.value().to_string()),
-            version: Set(entity.version as i32),
-            created_at: Set(entity.created_at),
-            last_modified_at: Set(entity.last_modified_at),
-            archived_at: Set(entity.archived_at),
-            name: Set(format!("__temp__{}", uuid::Uuid::now_v7())),
-            description: Set(entity.description.clone()),
+    async fn do_delete_all_by_ids(
+        &mut self,
+        ids: &[Id<Journal>],
+    ) -> Result<HashMap<Id<Journal>, Journal>> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
         }
-    }
 
-    fn updatable_columns(&self) -> Vec<entity::Column> {
-        vec![
-            entity::Column::Version,
-            entity::Column::CreatedAt,
-            entity::Column::LastModifiedAt,
-            entity::Column::ArchivedAt,
-            entity::Column::Name,
-            entity::Column::Description,
-        ]
+        let existing = self.do_find_all_by_ids(ids).await?;
+
+        for id in ids {
+            with_conn!(self, |conn| {
+                tag_entity::Entity::delete_many()
+                    .filter(tag_entity::Column::JournalId.eq(id.value()))
+                    .exec(conn)
+                    .await
+                    .map_err(shared::ErrorKind::internal)?
+            });
+        }
+
+        let values: Vec<sea_orm::Value> = ids.iter().map(|id| self.id_to_value(id)).collect();
+        with_conn!(self, |conn| {
+            entity::Entity::delete_many()
+                .filter(entity::Column::Id.is_in(values))
+                .exec(conn)
+                .await
+                .map_err(shared::ErrorKind::internal)?
+        });
+
+        Ok(existing)
     }
 }
 
@@ -222,7 +324,7 @@ impl ReadRepository<JournalSpec> for SeaOrmJournalRepository {
     type Entity = Journal;
 
     async fn find_all_by_ids(&self, ids: &[Id<Journal>]) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__find_all_by_ids(ids).await
+        self.do_find_all_by_ids(ids).await
     }
 
     async fn find_all(
@@ -230,21 +332,40 @@ impl ReadRepository<JournalSpec> for SeaOrmJournalRepository {
         spec: &JournalSpec,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__find_all(spec, limit).await
+        self.do_find_all(spec, limit).await
     }
 }
 
 #[async_trait::async_trait]
 impl WriteRepository<JournalSpec> for SeaOrmJournalRepository {
+    async fn begin(&mut self) -> Result<()> {
+        self.txn = Some(self.db.begin().await.map_err(shared::ErrorKind::internal)?);
+        Ok(())
+    }
+
+    async fn commit(&mut self) -> Result<()> {
+        if let Some(txn) = self.txn.take() {
+            txn.commit().await.map_err(shared::ErrorKind::internal)?;
+        }
+        Ok(())
+    }
+
+    async fn rollback(&mut self) -> Result<()> {
+        if let Some(txn) = self.txn.take() {
+            txn.rollback().await.map_err(shared::ErrorKind::internal)?;
+        }
+        Ok(())
+    }
+
     async fn save_all(&mut self, entities: &[Journal]) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__save_all(entities).await
+        self.do_save_all(entities).await
     }
 
     async fn delete_all_by_ids(
         &mut self,
         ids: &[Id<Journal>],
     ) -> Result<HashMap<Id<Journal>, Journal>> {
-        self.__delete_all_by_ids(ids).await
+        self.do_delete_all_by_ids(ids).await
     }
 }
 

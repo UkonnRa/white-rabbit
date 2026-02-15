@@ -311,3 +311,66 @@ async fn test_batch_delete_frees_name_for_create() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
+    let service = new_service().await;
+
+    let created = service.create([create_cmd("WillSurvive")]).await?;
+    let id = created[0].id.clone();
+
+    // Batch: delete "WillSurvive" + create ["Dup", "Dup"] (fails on duplicate names)
+    let result = service
+        .batch(JournalCommandBatch {
+            delete: HashSet::from([id.clone()]),
+            create: vec![create_cmd("Dup"), create_cmd("Dup")],
+            update: vec![],
+        })
+        .await;
+
+    assert!(result.is_err());
+
+    // "WillSurvive" should still exist — the delete was rolled back
+    let found = service.create([create_cmd("WillSurvive")]).await;
+    assert!(
+        found.is_err(),
+        "WillSurvive should still exist (rollback worked)"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_batch_rollback_on_update_failure() -> anyhow::Result<()> {
+    let service = new_service().await;
+
+    service.create([create_cmd("A"), create_cmd("B")]).await?;
+
+    // Batch: create "New" + update with nonexistent ID (fails)
+    let result = service
+        .batch(JournalCommandBatch {
+            delete: HashSet::new(),
+            create: vec![create_cmd("New")],
+            update: vec![JournalCommandUpdate {
+                id: JournalId::from("nonexistent"),
+                name: "Whatever".to_string(),
+                description: None,
+                tags: None,
+            }],
+        })
+        .await;
+
+    assert!(result.is_err());
+
+    // "New" should NOT exist — the create was rolled back
+    let created = service.create([create_cmd("New")]).await?;
+    assert_eq!(created.len(), 1, "New should not exist (rollback worked)");
+
+    // "A" and "B" should still exist unchanged
+    let err = service.create([create_cmd("A")]).await;
+    assert!(err.is_err(), "A should still exist");
+    let err = service.create([create_cmd("B")]).await;
+    assert!(err.is_err(), "B should still exist");
+
+    Ok(())
+}

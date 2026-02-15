@@ -14,6 +14,9 @@ pub trait SeaOrmReadRepository<S: Specification>: ReadRepository<S> {
         + sea_orm::ActiveModelBehavior
         + Send;
 
+    /// Returns the underlying database connection.
+    /// For transaction-aware operations, the concrete repository
+    /// implementation handles routing to the active transaction internally.
     fn get_db(&self) -> &DatabaseConnection;
 
     /// Convert a batch of SeaORM models into domain entities.

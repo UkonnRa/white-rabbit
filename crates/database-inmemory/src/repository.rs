@@ -54,6 +54,37 @@ pub trait InMemoryReadRepository<S: Specification>: ReadRepository<S> {
 
 #[async_trait::async_trait]
 pub trait InMemoryWriteRepository<S: Specification>: InMemoryReadRepository<S> {
+    /// Access the snapshot slot for transaction support.
+    fn get_snapshot(&self) -> &Option<HashMap<String, Self::Persistence>>;
+
+    /// Set/clear the snapshot slot.
+    fn set_snapshot(&mut self, snapshot: Option<HashMap<String, Self::Persistence>>);
+
+    /// Replace the entire storage (used by rollback).
+    fn set_storage(&mut self, storage: HashMap<String, Self::Persistence>);
+
+    // ── Transaction support ──────────────────────────────────────
+
+    async fn __begin(&mut self) -> Result<()> {
+        self.set_snapshot(Some(self.get_storage().clone()));
+        Ok(())
+    }
+
+    async fn __commit(&mut self) -> Result<()> {
+        self.set_snapshot(None);
+        Ok(())
+    }
+
+    async fn __rollback(&mut self) -> Result<()> {
+        if let Some(snapshot) = self.get_snapshot().clone() {
+            self.set_storage(snapshot);
+            self.set_snapshot(None);
+        }
+        Ok(())
+    }
+
+    // ── CRUD support ─────────────────────────────────────────────
+
     async fn __save_all(
         &mut self,
         entities: &[Self::Entity],

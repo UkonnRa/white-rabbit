@@ -39,6 +39,24 @@ pub trait ReadRepository<S: Specification>: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait WriteRepository<S: Specification>: ReadRepository<S> {
+    /// Begin a transaction. Subsequent reads and writes operate within it.
+    /// Default: no-op (for backends without transaction support).
+    async fn begin(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Commit the current transaction.
+    /// Default: no-op.
+    async fn commit(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Rollback the current transaction, undoing all mutations since `begin`.
+    /// Default: no-op.
+    async fn rollback(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     /// Save all entities and return the saved entities
     async fn save_all(
         &mut self,
