@@ -18,5 +18,5 @@ pub use persistence::Persistence;
 pub use repository::{ReadRepository, WriteRepository};
 pub use service::{ReadService, WriteService};
 pub use shared_derive::DomainModel;
-pub use specification::Specification;
+pub use specification::{Specification, SpecificationExpression};
 pub use r#type::{NonEmpty, NonNegative};

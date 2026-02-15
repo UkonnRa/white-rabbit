@@ -4,7 +4,7 @@ mod test;
 use chrono::{DateTime, Utc};
 use database_inmemory::repository::{InMemoryReadRepository, InMemoryWriteRepository};
 use domain::journal::repository::JournalRepository;
-use domain::journal::specification::JournalSpecification;
+use domain::journal::specification::{JournalSpec, JournalSpecification};
 use domain::journal::{Journal, JournalId};
 use shared::{Id, Persistence, ReadRepository, Result, WriteRepository};
 use std::collections::{HashMap, HashSet};
@@ -46,13 +46,15 @@ pub struct InMemoryJournalRepository {
     storage: HashMap<String, JournalPo>,
 }
 
-#[async_trait::async_trait]
-impl InMemoryReadRepository<JournalSpecification> for InMemoryJournalRepository {
-    type Persistence = JournalPo;
-
-    fn satisfies(&self, po: &JournalPo, spec: &JournalSpecification) -> bool {
+impl InMemoryJournalRepository {
+    fn satisfies_leaf(&self, po: &JournalPo, spec: &JournalSpecification) -> bool {
         match spec {
             JournalSpecification::Id(ids) => ids.contains(&po.id),
+            JournalSpecification::Name(names) => names
+                .iter()
+                .map(|s| s.trim().to_lowercase())
+                .filter(|s| !s.is_empty())
+                .any(|s| s == po.name.to_lowercase()),
             JournalSpecification::Tag(tags) => po.tags.iter().any(|t| tags.contains(t)),
             JournalSpecification::FullText(query) => {
                 let query = query.trim().to_lowercase();
@@ -61,6 +63,15 @@ impl InMemoryReadRepository<JournalSpecification> for InMemoryJournalRepository 
                     || po.tags.iter().any(|t| t.to_lowercase().contains(&query))
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl InMemoryReadRepository<JournalSpec> for InMemoryJournalRepository {
+    type Persistence = JournalPo;
+
+    fn satisfies(&self, po: &JournalPo, spec: &JournalSpec) -> bool {
+        spec.evaluate(&|leaf| self.satisfies_leaf(po, leaf))
     }
 
     fn get_storage(&self) -> &HashMap<String, JournalPo> {
@@ -103,7 +114,7 @@ impl InMemoryReadRepository<JournalSpecification> for InMemoryJournalRepository 
 }
 
 #[async_trait::async_trait]
-impl ReadRepository<JournalSpecification> for InMemoryJournalRepository {
+impl ReadRepository<JournalSpec> for InMemoryJournalRepository {
     type Entity = Journal;
 
     async fn find_all_by_ids(&self, ids: &[Id<Journal>]) -> Result<HashMap<Id<Journal>, Journal>> {
@@ -112,7 +123,7 @@ impl ReadRepository<JournalSpecification> for InMemoryJournalRepository {
 
     async fn find_all(
         &self,
-        spec: &JournalSpecification,
+        spec: &JournalSpec,
         limit: Option<usize>,
     ) -> Result<HashMap<Id<Journal>, Journal>> {
         self.__find_all(spec, limit).await
@@ -120,14 +131,9 @@ impl ReadRepository<JournalSpecification> for InMemoryJournalRepository {
 }
 
 #[async_trait::async_trait]
-impl WriteRepository<JournalSpecification> for InMemoryJournalRepository {
+impl WriteRepository<JournalSpec> for InMemoryJournalRepository {
     async fn save_all(&mut self, entities: &[Journal]) -> Result<HashMap<Id<Journal>, Journal>> {
         self.__save_all(entities).await
-    }
-
-    async fn save(&mut self, entity: &Journal) -> Result<Journal> {
-        self.__save_all(std::slice::from_ref(entity)).await?;
-        Ok(entity.clone())
     }
 
     async fn delete_all_by_ids(
@@ -141,4 +147,4 @@ impl WriteRepository<JournalSpecification> for InMemoryJournalRepository {
 impl JournalRepository for InMemoryJournalRepository {}
 
 #[async_trait::async_trait]
-impl InMemoryWriteRepository<JournalSpecification> for InMemoryJournalRepository {}
+impl InMemoryWriteRepository<JournalSpec> for InMemoryJournalRepository {}
