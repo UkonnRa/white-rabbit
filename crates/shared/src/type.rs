@@ -19,7 +19,7 @@ impl FromStr for NonEmpty<String> {
 
     fn from_str(s: &str) -> Result<Self> {
         match s.trim() {
-            "" => Err(Error::NonEmpty),
+            "" => Err(Error::non_empty()),
             value => Ok(Self(value.to_string())),
         }
     }
@@ -37,7 +37,7 @@ where
             .map(|s| s.into().try_into())
             .collect::<Result<Vec<NonEmpty<String>>>>()?
         {
-            vec if vec.is_empty() => Err(Error::NonEmpty),
+            vec if vec.is_empty() => Err(Error::non_empty()),
             vec => Ok(Self(vec)),
         }
     }
@@ -48,7 +48,7 @@ impl<T> TryFrom<Vec<T>> for NonEmpty<Vec<T>> {
 
     fn try_from(value: Vec<T>) -> Result<Self> {
         if value.is_empty() {
-            Err(Error::NonEmpty)
+            Err(Error::non_empty())
         } else {
             Ok(Self(value))
         }
@@ -80,8 +80,8 @@ impl TryFrom<Decimal> for NonNegative<Decimal> {
     type Error = Error;
 
     fn try_from(value: Decimal) -> Result<Self> {
-        if value.lt(&Decimal::ZERO) {
-            Err(Error::NonNegativeValue(value.to_string()))
+        if value < Decimal::ZERO {
+            Err(Error::non_negative(value))
         } else {
             Ok(Self(value))
         }

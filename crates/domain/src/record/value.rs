@@ -62,6 +62,10 @@ pub struct Amount {
     pub unit: NonEmpty<String>,
 }
 
+impl Amount {
+    pub const TYPE: &str = "whiterabbit::domain::Amount";
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Cost {
     Price(Amount),

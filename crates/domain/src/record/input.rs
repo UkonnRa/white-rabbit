@@ -8,43 +8,39 @@ use crate::record::{
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
-use shared::{NonEmpty, NonNegative};
+use shared::NonEmpty;
 use std::collections::HashSet;
 
-pub enum CostInput {
-    Price(AmountInput),
-    Date(NaiveDate),
-    Reference(String),
-}
+pub struct CostInput(String);
 
 impl TryFrom<CostInput> for Cost {
     type Error = Error;
 
     fn try_from(value: CostInput) -> Result<Self> {
-        match value {
-            CostInput::Price(amount) => Ok(Cost::Price(amount.try_into()?)),
-            CostInput::Date(date) => Ok(Cost::Date(date)),
-            CostInput::Reference(reference) => Ok(Cost::Reference(
-                NonEmpty::try_from(reference).map_err(|_| Error::NonEmpty {
-                    typ: "record.cost",
-                    field: "reference".to_string(),
-                })?,
-            )),
+        if let Ok(date) = value.0.parse() {
+            Ok(Cost::Date(date))
+        } else if let Ok(reference) = value.0.parse() {
+            Ok(Cost::Reference(reference))
+        } else {
+            Ok(Cost::Price(AmountInput(value.0).try_into()?))
         }
     }
 }
 
-pub struct AmountInput {
-    pub amount: Decimal,
-    pub unit: String,
+pub struct AmountInput(String);
+
+impl<S> From<S> for AmountInput
+where
+    S: Into<String>,
+{
+    fn from(value: S) -> Self {
+        Self(value.into())
+    }
 }
 
 impl Default for AmountInput {
     fn default() -> Self {
-        Self {
-            amount: Decimal::ZERO,
-            unit: DEFAULT_UNIT.into(),
-        }
+        Self(format!("0 {}", DEFAULT_UNIT))
     }
 }
 
@@ -52,16 +48,23 @@ impl TryFrom<AmountInput> for Amount {
     type Error = Error;
 
     fn try_from(value: AmountInput) -> Result<Self> {
+        let split = value.0.split_whitespace().collect::<Vec<_>>();
+        let [amount, unit] = split.as_slice() else {
+            return Err(Error::invalid_format(value.0));
+        };
+
+        let amount = amount
+            .parse::<Decimal>()
+            .map_err(|_| Error::invalid_format(amount))?;
+        let unit = unit
+            .parse::<NonEmpty<String>>()
+            .map_err(|e: Error| e.with_resource_type(Amount::TYPE).with_field("unit"))?;
+
         Ok(Amount {
-            amount: NonNegative::try_from(value.amount).map_err(|_| Error::NonNegativeValue {
-                typ: Record::TYPE,
-                field: "amount".to_string(),
-                current: value.amount.to_string(),
-            })?,
-            unit: NonEmpty::try_from(value.unit).map_err(|_| Error::NonEmpty {
-                typ: Record::TYPE,
-                field: "unit".to_string(),
-            })?,
+            amount: amount
+                .try_into()
+                .map_err(|e: Error| e.with_resource_type(Amount::TYPE).with_field("amount"))?,
+            unit,
         })
     }
 }
@@ -95,10 +98,9 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
 
     fn try_from(value: Vec<RecordItemInput>) -> Result<Self> {
         match value.first().map(|item| item.kind) {
-            None => Err(Error::NonEmpty {
-                typ: Record::TYPE,
-                field: "items".to_string(),
-            }),
+            None => Err(Error::non_empty()
+                .with_resource_type(Record::TYPE)
+                .with_field("items")),
             Some(RecordItemKind::Transaction)
                 if value
                     .iter()
@@ -122,10 +124,8 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(RecordItems::Transactions(
-                    NonEmpty::try_from(transactions).map_err(|_| Error::NonEmpty {
-                        typ: Record::TYPE,
-                        field: "items".to_string(),
-                    })?,
+                    NonEmpty::try_from(transactions)
+                        .map_err(|e| e.with_resource_type(Record::TYPE).with_field("items"))?,
                 ))
             }
             Some(RecordItemKind::Validation)
@@ -144,20 +144,16 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(RecordItems::Validations(
-                    NonEmpty::try_from(validations).map_err(|_| Error::NonEmpty {
-                        typ: Record::TYPE,
-                        field: "items".to_string(),
-                    })?,
+                    NonEmpty::try_from(validations)
+                        .map_err(|e| e.with_resource_type(Record::TYPE).with_field("items"))?,
                 ))
             }
-            _ => Err(Error::CannotExistSameTime {
-                typ: Record::TYPE,
-                field: "items".to_string(),
-                values: vec![
-                    RecordItemKind::Transaction.to_string(),
-                    RecordItemKind::Validation.to_string(),
-                ],
-            }),
+            _ => Err(Error::conflicting_values(&[
+                RecordItemKind::Transaction.to_string(),
+                RecordItemKind::Validation.to_string(),
+            ])
+            .with_resource_type(Record::TYPE)
+            .with_field("items")),
         }
     }
 }
@@ -176,7 +172,6 @@ pub struct RecordInput {
     pub payee: String,
 }
 
-
 impl TryFrom<RecordInput> for Record {
     type Error = Error;
 
@@ -186,10 +181,8 @@ impl TryFrom<RecordInput> for Record {
             .tags
             .into_iter()
             .map(|tag| {
-                NonEmpty::try_from(tag).map_err(|_| Error::NonEmpty {
-                    typ: Record::TYPE,
-                    field: "tags".to_string(),
-                })
+                NonEmpty::try_from(tag)
+                    .map_err(|e| e.with_resource_type(Record::TYPE).with_field("tags"))
             })
             .collect::<Result<HashSet<_>>>()?;
 
