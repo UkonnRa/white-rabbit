@@ -23,3 +23,5 @@ syn = { version = "2.0", features = ["full"] }
 rust_decimal = { version = "1.40", features = ["serde-str", "macros"] }
 strum = { version = "0.27", features = ["derive"] }
 itertools = "0.14"
+sea-orm = { version = "2.0.0-rc.32", features = ["runtime-tokio", "macros", "with-chrono", "with-json", "with-rust_decimal", "with-uuid"] }
+sea-orm-migration = { version = "2.0.0-rc.32", features = ["runtime-tokio"] }
