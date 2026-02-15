@@ -1,8 +1,13 @@
 //! Journal is a collection of [`crate::account::Account`]
-//!
+
+mod input;
+use std::collections::HashSet;
+
+pub use input::*;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared::DomainModel;
+use shared::{DomainModel, NonEmpty};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, DomainModel)]
 pub struct Journal {
@@ -13,6 +18,11 @@ pub struct Journal {
     pub last_modified_at: Option<DateTime<Utc>>,
     pub archived_at: Option<DateTime<Utc>>,
 
-    pub name: String,
+    pub name: NonEmpty<String>,
     pub description: String,
+    pub tags: HashSet<NonEmpty<String>>,
+}
+
+impl Journal {
+    pub const TYPE: &str = "whiterabbit::domain::Journal";
 }

@@ -72,10 +72,3 @@ pub enum Cost {
     Date(NaiveDate),
     Reference(NonEmpty<String>),
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, strum::Display)]
-pub enum CostKind {
-    Price,
-    Date,
-    Reference,
-}
