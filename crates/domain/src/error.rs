@@ -62,6 +62,16 @@ impl ErrorKind {
             .with_detail(msg.to_string())
     }
 
+    pub fn duplicate_values(value: impl fmt::Display) -> Error {
+        shared::ContextualError::new(Self::Shared(shared::ErrorKind::DuplicateValues {
+            value: value.to_string(),
+        }))
+    }
+
+    pub fn conflict() -> Error {
+        shared::ContextualError::new(Self::Shared(shared::ErrorKind::Conflict))
+    }
+
     pub fn mismatch(expected: impl fmt::Display, actual: impl fmt::Display) -> Error {
         shared::ContextualError::new(Self::Mismatch {
             expected: expected.to_string(),

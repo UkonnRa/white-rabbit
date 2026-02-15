@@ -1,5 +1,10 @@
+pub mod command;
 mod context;
 mod input;
+pub mod repository;
+pub mod service;
+pub mod specification;
+
 #[cfg(test)]
 mod test;
 
@@ -37,6 +42,28 @@ pub struct Account {
 
 impl Account {
     pub const TYPE: &str = "whiterabbit::domain::Account";
+
+    /// The 5 reserved root account names (one per `AccountType`).
+    pub const RESERVED_ROOT_NAMES: [&str; 5] =
+        ["Asset", "Liability", "Equity", "Income", "Expense"];
+
+    /// Returns true if the given name is one of the reserved root names
+    /// (case-insensitive).
+    pub fn is_reserved_name(name: &str) -> bool {
+        Self::RESERVED_ROOT_NAMES
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(name))
+    }
+
+    /// Returns true if this account is archived.
+    pub fn is_archived(&self) -> bool {
+        self.archived_at.is_some()
+    }
+
+    /// Returns true if this is a root account (no parent).
+    pub fn is_root(&self) -> bool {
+        self.parent_id.is_none()
+    }
 }
 
 #[derive(

@@ -2,6 +2,8 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20260209_000001_create_journal_table;
 mod m20260209_000002_create_journal_tag_table;
+mod m20260209_000003_create_account_table;
+mod m20260209_000004_create_account_tag_table;
 
 pub struct Migrator;
 
@@ -11,6 +13,8 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20260209_000001_create_journal_table::Migration),
             Box::new(m20260209_000002_create_journal_tag_table::Migration),
+            Box::new(m20260209_000003_create_account_table::Migration),
+            Box::new(m20260209_000004_create_account_tag_table::Migration),
         ]
     }
 }
