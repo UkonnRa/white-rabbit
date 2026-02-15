@@ -1,35 +1,44 @@
 use std::fmt;
 
-// ── What went wrong ──────────────────────────────────────────────
+// ── Error Kind Trait ─────────────────────────────────────────────
 
-/// Classification of the error, carrying the error's own data.
-/// Reusable across all projects. Maps to RFC 9457 `type` / JSON:API `code`.
-///
-/// This carries **what** went wrong and **what value** triggered it,
-/// but NOT **where** (resource type, field, pointer) — that context
-/// is on [`Error`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Trait for error enums that can be wrapped in [`ContextualError`].
+pub trait ErrorKindInfo: fmt::Debug + fmt::Display + Send + Sync + 'static {
+    /// Default HTTP status code (RFC 9457 `status`).
+    fn default_status(&self) -> u16;
+    /// Stable, human-readable title (RFC 9457 `title`).
+    fn title(&self) -> &'static str;
+}
+
+// ── Shared Error Kind ────────────────────────────────────────────
+
+/// Universal error variants shared across all projects.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ErrorKind {
-    // Validation constraints
+    #[error("value must be non-empty")]
     NonEmpty,
+    #[error("non-negative value expected, got {actual}")]
     NonNegative { actual: String },
+    #[error("duplicate value: {value}")]
     DuplicateValues { value: String },
+    #[error("values cannot coexist: {}", values.join(", "))]
     ConflictingValues { values: Vec<String> },
+    #[error("cannot parse \"{value}\"")]
     InvalidFormat { value: String },
-
-    // Resource / access
+    #[error("not found")]
     NotFound,
+    #[error("unauthorized")]
     Unauthorized,
+    #[error("forbidden")]
     Forbidden,
+    #[error("conflict")]
     Conflict,
-
-    // Infrastructure
+    #[error("internal error")]
     Internal,
 }
 
-impl ErrorKind {
-    /// Default HTTP status code for this kind (RFC 9457 `status`).
-    pub fn default_status(&self) -> u16 {
+impl ErrorKindInfo for ErrorKind {
+    fn default_status(&self) -> u16 {
         match self {
             Self::NonEmpty
             | Self::NonNegative { .. }
@@ -44,9 +53,7 @@ impl ErrorKind {
         }
     }
 
-    /// Stable, human-readable title (RFC 9457 `title` / JSON:API `title`).
-    /// SHOULD NOT change from occurrence to occurrence of the problem.
-    pub fn title(&self) -> &'static str {
+    fn title(&self) -> &'static str {
         match self {
             Self::NonEmpty => "Value must be non-empty",
             Self::NonNegative { .. } => "Value must be non-negative",
@@ -62,216 +69,138 @@ impl ErrorKind {
     }
 }
 
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NonEmpty => write!(f, "value must be non-empty"),
-            Self::NonNegative { actual } => {
-                write!(f, "non-negative value expected, got {actual}")
-            }
-            Self::DuplicateValues { value } => write!(f, "duplicate value: {value}"),
-            Self::ConflictingValues { values } => {
-                write!(f, "values cannot coexist: {}", values.join(", "))
-            }
-            Self::InvalidFormat { value } => write!(f, "cannot parse \"{value}\""),
-            Self::NotFound => write!(f, "not found"),
-            Self::Unauthorized => write!(f, "unauthorized"),
-            Self::Forbidden => write!(f, "forbidden"),
-            Self::Conflict => write!(f, "conflict"),
-            Self::Internal => write!(f, "internal error"),
-        }
-    }
-}
-
-// ── Where it went wrong ──────────────────────────────────────────
+// ── Error Source ─────────────────────────────────────────────────
 
 /// Points to the origin of the error in the request.
 /// Aligns with JSON:API `source` object and RFC 9457 extension members.
 #[derive(Debug, Clone, Default)]
 pub struct ErrorSource {
-    /// JSON Pointer (RFC 6901) into the request document,
-    /// e.g. "/data/attributes/amount".
     pub pointer: Option<String>,
-    /// URI query parameter, e.g. "filter[status]".
     pub parameter: Option<String>,
-    /// Request header name.
     pub header: Option<String>,
 }
 
-// ── The unified error ────────────────────────────────────────────
+// ── Error Context (heap-allocated) ───────────────────────────────
 
-/// A single problem occurrence.
-/// Modeled after RFC 9457 Problem Details and JSON:API Error Objects.
-///
-/// - [`ErrorKind`] carries **what** went wrong and its intrinsic data.
-/// - The context fields here carry **where** it went wrong.
-/// - `detail` is an optional human-readable override (RFC 9457 `detail`);
-///   when absent, `ErrorKind::Display` provides the occurrence-specific message.
-pub struct Error {
-    // ─ identity ─
-    /// The classification of the error, with its intrinsic data.
-    pub kind: ErrorKind,
-
-    // ─ domain-level context (set by domain layer) ─
-    /// The resource type, e.g. "Record".
+/// Optional context fields, heap-allocated so that `ContextualError` stays small.
+#[derive(Debug, Default)]
+pub struct ErrorContext {
     pub resource_type: Option<&'static str>,
-    /// The field name, e.g. "amount".
     pub field: Option<String>,
-
-    // ─ occurrence-specific detail ─
-    /// Optional human-readable detail override (RFC 9457 `detail`).
-    /// When absent, `ErrorKind`'s `Display` is used instead.
     pub detail: Option<String>,
-
-    // ─ request-level source (set by endpoint layer) ─
-    /// Where in the request the error originated (JSON:API `source`).
     pub source: ErrorSource,
-
-    // ─ cause chain ─
-    /// The underlying cause, if any.
     pub cause: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
-impl Error {
-    pub fn new(kind: ErrorKind) -> Self {
+// ── Contextual Error (stack-friendly) ────────────────────────────
+
+/// A small, stack-friendly error: the error kind + a boxed context.
+///
+/// `Display` delegates to the inner error. The context fields are accessed
+/// programmatically by the endpoint layer when serializing to JSON:API / RFC 9457.
+#[derive(Debug, thiserror::Error)]
+#[error("{error}")]
+pub struct ContextualError<E: ErrorKindInfo> {
+    pub error: E,
+    pub context: Box<ErrorContext>,
+}
+
+impl<E: ErrorKindInfo> ContextualError<E> {
+    pub fn new(error: E) -> Self {
         Self {
-            kind,
-            resource_type: None,
-            field: None,
-            detail: None,
-            source: ErrorSource::default(),
-            cause: None,
+            error,
+            context: Box::new(ErrorContext::default()),
         }
     }
 
-    // ── Convenience constructors ────────────────────────────────
-
-    pub fn non_empty() -> Self {
-        Self::new(ErrorKind::NonEmpty)
-    }
-
-    pub fn non_negative(actual: impl fmt::Display) -> Self {
-        Self::new(ErrorKind::NonNegative {
-            actual: actual.to_string(),
-        })
-    }
-
-    pub fn invalid_format(value: impl fmt::Display) -> Self {
-        Self::new(ErrorKind::InvalidFormat {
-            value: value.to_string(),
-        })
-    }
-
-    pub fn duplicate_values(value: impl fmt::Display) -> Self {
-        Self::new(ErrorKind::DuplicateValues {
-            value: value.to_string(),
-        })
-    }
-
-    pub fn conflicting_values(values: &[impl fmt::Display]) -> Self {
-        Self::new(ErrorKind::ConflictingValues {
-            values: values.iter().map(|v| v.to_string()).collect(),
-        })
-    }
-
-    pub fn not_found() -> Self {
-        Self::new(ErrorKind::NotFound)
-    }
-
-    pub fn internal(msg: impl fmt::Display) -> Self {
-        Self::new(ErrorKind::Internal).with_detail(msg.to_string())
-    }
-
-    // ── Builder methods for enriching with context ──────────────
-
     pub fn with_resource_type(mut self, typ: &'static str) -> Self {
-        self.resource_type = Some(typ);
+        self.context.resource_type = Some(typ);
         self
     }
 
     pub fn with_field(mut self, field: impl Into<String>) -> Self {
-        self.field = Some(field.into());
+        self.context.field = Some(field.into());
         self
     }
 
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
-        self.detail = Some(detail.into());
+        self.context.detail = Some(detail.into());
         self
     }
 
     pub fn with_pointer(mut self, pointer: impl Into<String>) -> Self {
-        self.source.pointer = Some(pointer.into());
+        self.context.source.pointer = Some(pointer.into());
         self
     }
 
     pub fn with_parameter(mut self, parameter: impl Into<String>) -> Self {
-        self.source.parameter = Some(parameter.into());
+        self.context.source.parameter = Some(parameter.into());
         self
     }
 
     pub fn with_cause(mut self, cause: impl std::error::Error + Send + Sync + 'static) -> Self {
-        self.cause = Some(Box::new(cause));
+        self.context.cause = Some(Box::new(cause));
         self
     }
-}
 
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut d = f.debug_struct("Error");
-        d.field("kind", &self.kind);
-        if let Some(typ) = self.resource_type {
-            d.field("resource_type", &typ);
+    pub fn map_error<F: ErrorKindInfo>(self, f: impl FnOnce(E) -> F) -> ContextualError<F> {
+        ContextualError {
+            error: f(self.error),
+            context: self.context,
         }
-        if let Some(field) = &self.field {
-            d.field("field", field);
-        }
-        if let Some(detail) = &self.detail {
-            d.field("detail", detail);
-        }
-        if self.source.pointer.is_some()
-            || self.source.parameter.is_some()
-            || self.source.header.is_some()
-        {
-            d.field("source", &self.source);
-        }
-        if let Some(cause) = &self.cause {
-            d.field("cause", cause);
-        }
-        d.finish()
+    }
+
+    /// Convert the error kind using `From`, preserving all context.
+    /// The target type is inferred from the return position — no turbofish needed.
+    pub fn convert<F: ErrorKindInfo + From<E>>(self) -> ContextualError<F> {
+        self.map_error(F::from)
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Context prefix: "Record.amount: "
-        if let Some(typ) = self.resource_type {
-            write!(f, "{typ}")?;
-            if let Some(field) = &self.field {
-                write!(f, ".{field}")?;
-            }
-            write!(f, ": ")?;
-        } else if let Some(field) = &self.field {
-            write!(f, "{field}: ")?;
-        }
+// ── Convenience constructors ─────────────────────────────────────
 
-        // ErrorKind carries the occurrence-specific message
-        write!(f, "{}", self.kind)?;
+impl ErrorKind {
+    pub fn non_empty() -> Error {
+        ContextualError::new(Self::NonEmpty)
+    }
 
-        // Optional detail override (appended if present)
-        if let Some(detail) = &self.detail {
-            write!(f, " ({detail})")?;
-        }
-        Ok(())
+    pub fn non_negative(actual: impl fmt::Display) -> Error {
+        ContextualError::new(Self::NonNegative {
+            actual: actual.to_string(),
+        })
+    }
+
+    pub fn invalid_format(value: impl fmt::Display) -> Error {
+        ContextualError::new(Self::InvalidFormat {
+            value: value.to_string(),
+        })
+    }
+
+    pub fn duplicate_values(value: impl fmt::Display) -> Error {
+        ContextualError::new(Self::DuplicateValues {
+            value: value.to_string(),
+        })
+    }
+
+    pub fn conflicting_values(values: &[impl fmt::Display]) -> Error {
+        ContextualError::new(Self::ConflictingValues {
+            values: values.iter().map(|v| v.to_string()).collect(),
+        })
+    }
+
+    pub fn not_found() -> Error {
+        ContextualError::new(Self::NotFound)
+    }
+
+    pub fn internal(msg: impl fmt::Display) -> Error {
+        ContextualError::new(Self::Internal).with_detail(msg.to_string())
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause
-            .as_ref()
-            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
-    }
-}
+// ── Type aliases (define complex, use simple) ────────────────────
 
-/// Shared result type.
+/// `shared::Error` — use this everywhere, no Box needed.
+pub type Error = ContextualError<ErrorKind>;
+
+/// `shared::Result<T>` — clean return type.
 pub type Result<T> = std::result::Result<T, Error>;

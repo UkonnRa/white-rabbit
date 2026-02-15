@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
-use shared::{Error, NonEmpty, Result};
+use shared::NonEmpty;
 
+use crate::error::{Error, Result};
 use crate::journal::{Journal, JournalId};
 
 #[derive(Default)]
@@ -20,7 +21,6 @@ pub struct JournalInput {
 
 impl TryFrom<JournalInput> for Journal {
     type Error = Error;
-
     fn try_from(value: JournalInput) -> Result<Self> {
         Ok(Journal {
             id: value.id,
@@ -29,8 +29,11 @@ impl TryFrom<JournalInput> for Journal {
             last_modified_at: value.last_modified_at,
             archived_at: value.archived_at,
 
-            name: NonEmpty::try_from(value.name)
-                .map_err(|e| e.with_resource_type(Journal::TYPE).with_field("name"))?,
+            name: NonEmpty::try_from(value.name).map_err(|e| {
+                e.with_resource_type(Journal::TYPE)
+                    .with_field("name")
+                    .convert()
+            })?,
             description: value.description,
             tags: value
                 .tags

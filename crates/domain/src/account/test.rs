@@ -1,7 +1,41 @@
-use crate::journal::JournalId;
-use shared::{EntityId, ErrorKind};
+use std::collections::HashMap;
 
-use super::{Account, AccountId, AccountInput, AccountType};
+use crate::error::ErrorKind;
+use crate::journal::{Journal, JournalId};
+use shared::{EntityId, NonEmpty};
+
+use super::{Account, AccountContext, AccountId, AccountInput, AccountType};
+
+fn make_account(id: &str, parent_id: Option<&str>, account_type: AccountType) -> Account {
+    Account {
+        id: AccountId::from_value(id),
+        version: 0,
+        created_at: None,
+        last_modified_at: None,
+        archived_at: None,
+        journal_id: JournalId::from_value("test-journal"),
+        parent_id: parent_id.map(AccountId::from_value),
+        r#type: account_type,
+        name: NonEmpty::try_from("test".to_string()).unwrap(),
+        description: String::new(),
+        tags: Default::default(),
+    }
+}
+
+fn make_journal() -> Journal {
+    Journal {
+        id: JournalId::from_value("test-journal"),
+        version: 0,
+        created_at: None,
+        last_modified_at: None,
+        archived_at: None,
+        name: NonEmpty::try_from("test".to_string()).unwrap(),
+        description: String::new(),
+        tags: Default::default(),
+    }
+}
+
+// ── Input tests ──────────────────────────────────────────────────
 
 #[test]
 fn test_account_input_try_into_success() {
@@ -53,7 +87,7 @@ fn test_account_input_with_parent_id() {
     );
 }
 
-// ── Error tests ──────────────────────────────────────────────────
+// ── Input error tests ────────────────────────────────────────────
 
 #[test]
 fn test_error_empty_name_returns_non_empty_with_context() {
@@ -67,12 +101,97 @@ fn test_error_empty_name_returns_non_empty_with_context() {
     .try_into();
 
     let err = result.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NonEmpty);
-    assert_eq!(err.resource_type, Some(Account::TYPE));
-    assert_eq!(err.field.as_deref(), Some("name"));
+    assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NonEmpty));
+    assert_eq!(err.context.resource_type, Some(Account::TYPE));
+    assert_eq!(err.context.field.as_deref(), Some("name"));
 }
 
 #[test]
 fn test_account_type_default_is_asset() {
     assert_eq!(AccountType::default(), AccountType::Asset);
+}
+
+// ── Context validation tests ─────────────────────────────────────
+
+#[test]
+fn test_context_valid_three_level_chain() {
+    let root = make_account("root", None, AccountType::Asset);
+    let mid = make_account("mid", Some("root"), AccountType::Asset);
+    let leaf = make_account("leaf", Some("mid"), AccountType::Asset);
+
+    let accounts = HashMap::from([(root.id.clone(), root), (mid.id.clone(), mid)]);
+    let ctx = AccountContext {
+        entity: leaf,
+        journal: make_journal(),
+        accounts,
+    };
+    ctx.validate().unwrap();
+}
+
+#[test]
+fn test_context_root_account_no_parent_is_valid() {
+    let root = make_account("root", None, AccountType::Income);
+    let ctx = AccountContext {
+        entity: root,
+        journal: make_journal(),
+        accounts: HashMap::new(),
+    };
+    ctx.validate().unwrap();
+}
+
+#[test]
+fn test_context_mismatch_immediate_parent() {
+    let root = make_account("root", None, AccountType::Asset);
+    let child = make_account("child", Some("root"), AccountType::Expense);
+
+    let accounts = HashMap::from([(root.id.clone(), root)]);
+    let ctx = AccountContext {
+        entity: child,
+        journal: make_journal(),
+        accounts,
+    };
+
+    let err = ctx.validate().unwrap_err();
+    assert!(matches!(err.error, ErrorKind::Mismatch { .. }));
+    assert_eq!(err.context.resource_type, Some(Account::TYPE));
+    assert_eq!(err.context.field.as_deref(), Some("type"));
+    match &err.error {
+        ErrorKind::Mismatch { expected, actual } => {
+            assert_eq!(expected, "Asset");
+            assert_eq!(actual, "Expense");
+        }
+        other => panic!("expected Mismatch, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_context_mismatch_deep_in_chain() {
+    let root = make_account("root", None, AccountType::Asset);
+    let mid = make_account("mid", Some("root"), AccountType::Asset);
+    let leaf = make_account("leaf", Some("mid"), AccountType::Liability);
+
+    let accounts = HashMap::from([(root.id.clone(), root), (mid.id.clone(), mid)]);
+    let ctx = AccountContext {
+        entity: leaf,
+        journal: make_journal(),
+        accounts,
+    };
+
+    let err = ctx.validate().unwrap_err();
+    assert!(matches!(err.error, ErrorKind::Mismatch { .. }));
+}
+
+#[test]
+fn test_context_parent_not_found() {
+    let child = make_account("child", Some("nonexistent"), AccountType::Asset);
+    let ctx = AccountContext {
+        entity: child,
+        journal: make_journal(),
+        accounts: HashMap::new(),
+    };
+
+    let err = ctx.validate().unwrap_err();
+    assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NotFound));
+    assert_eq!(err.context.resource_type, Some(Account::TYPE));
+    assert_eq!(err.context.field.as_deref(), Some("parent_id"));
 }

@@ -1,6 +1,9 @@
+mod context;
 mod input;
 #[cfg(test)]
 mod test;
+
+pub use context::*;
 pub use input::*;
 
 use std::collections::HashSet;
@@ -36,7 +39,9 @@ impl Account {
     pub const TYPE: &str = "whiterabbit::domain::Account";
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, Default, strum::Display,
+)]
 pub enum AccountType {
     #[default]
     Asset,

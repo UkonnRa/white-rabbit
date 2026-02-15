@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
-use shared::{Error, NonEmpty, Result};
+use shared::NonEmpty;
 use std::collections::HashSet;
 
 use crate::account::{Account, AccountId, AccountType};
+use crate::error::{Error, Result};
 use crate::journal::JournalId;
 
 #[derive(Default)]
@@ -15,8 +16,6 @@ pub struct AccountInput {
 
     pub journal_id: JournalId,
     pub parent_id: Option<AccountId>,
-    // The type of children should be the same as the parent's type
-    // For each Journal, we always have 5 roots: Asset, Liability, Equity, Income, Expense
     pub r#type: AccountType,
 
     pub name: String,
@@ -26,7 +25,6 @@ pub struct AccountInput {
 
 impl TryFrom<AccountInput> for Account {
     type Error = Error;
-
     fn try_from(value: AccountInput) -> Result<Self> {
         Ok(Account {
             id: value.id,
@@ -35,8 +33,11 @@ impl TryFrom<AccountInput> for Account {
             last_modified_at: value.last_modified_at,
             archived_at: value.archived_at,
 
-            name: NonEmpty::try_from(value.name)
-                .map_err(|e| e.with_resource_type(Account::TYPE).with_field("name"))?,
+            name: NonEmpty::try_from(value.name).map_err(|e| {
+                e.with_resource_type(Account::TYPE)
+                    .with_field("name")
+                    .convert()
+            })?,
             description: value.description,
             tags: value
                 .tags

@@ -1,4 +1,5 @@
-use shared::{EntityId, ErrorKind};
+use crate::error::ErrorKind;
+use shared::EntityId;
 
 use super::{Journal, JournalId, JournalInput};
 
@@ -41,7 +42,7 @@ fn test_error_empty_name_returns_non_empty_with_context() {
     .try_into();
 
     let err = result.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NonEmpty);
-    assert_eq!(err.resource_type, Some(Journal::TYPE));
-    assert_eq!(err.field.as_deref(), Some("name"));
+    assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NonEmpty));
+    assert_eq!(err.context.resource_type, Some(Journal::TYPE));
+    assert_eq!(err.context.field.as_deref(), Some("name"));
 }

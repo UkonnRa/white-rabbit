@@ -10,7 +10,9 @@ mod r#type;
 
 pub use command::Command;
 pub use entity::Entity;
-pub use error::{Error, ErrorKind, ErrorSource, Result};
+pub use error::{
+    ContextualError, Error, ErrorContext, ErrorKind, ErrorKindInfo, ErrorSource, Result,
+};
 pub use id::{EntityId, Id};
 pub use persistence::Persistence;
 pub use repository::{ReadRepository, WriteRepository};

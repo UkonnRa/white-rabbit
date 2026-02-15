@@ -8,7 +8,6 @@ pub struct NonEmpty<T>(T);
 
 impl TryFrom<String> for NonEmpty<String> {
     type Error = Error;
-
     fn try_from(value: String) -> Result<Self> {
         value.parse()
     }
@@ -16,10 +15,9 @@ impl TryFrom<String> for NonEmpty<String> {
 
 impl FromStr for NonEmpty<String> {
     type Err = Error;
-
     fn from_str(s: &str) -> Result<Self> {
         match s.trim() {
-            "" => Err(Error::non_empty()),
+            "" => Err(crate::ErrorKind::non_empty()),
             value => Ok(Self(value.to_string())),
         }
     }
@@ -30,14 +28,13 @@ where
     S: Into<String>,
 {
     type Error = Error;
-
     fn try_from(value: Vec<S>) -> Result<Self> {
         match value
             .into_iter()
             .map(|s| s.into().try_into())
             .collect::<Result<Vec<NonEmpty<String>>>>()?
         {
-            vec if vec.is_empty() => Err(Error::non_empty()),
+            vec if vec.is_empty() => Err(crate::ErrorKind::non_empty()),
             vec => Ok(Self(vec)),
         }
     }
@@ -45,10 +42,9 @@ where
 
 impl<T> TryFrom<Vec<T>> for NonEmpty<Vec<T>> {
     type Error = Error;
-
     fn try_from(value: Vec<T>) -> Result<Self> {
         if value.is_empty() {
-            Err(Error::non_empty())
+            Err(crate::ErrorKind::non_empty())
         } else {
             Ok(Self(value))
         }
@@ -61,7 +57,6 @@ where
 {
     type Item = T;
     type IntoIter = I::IntoIter;
-
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
@@ -78,10 +73,9 @@ pub struct NonNegative<T>(T);
 
 impl TryFrom<Decimal> for NonNegative<Decimal> {
     type Error = Error;
-
     fn try_from(value: Decimal) -> Result<Self> {
         if value < Decimal::ZERO {
-            Err(Error::non_negative(value))
+            Err(crate::ErrorKind::non_negative(value))
         } else {
             Ok(Self(value))
         }
@@ -90,7 +84,6 @@ impl TryFrom<Decimal> for NonNegative<Decimal> {
 
 impl Deref for NonNegative<Decimal> {
     type Target = Decimal;
-
     fn deref(&self) -> &Self::Target {
         &self.0
     }

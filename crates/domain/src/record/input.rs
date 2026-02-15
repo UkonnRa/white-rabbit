@@ -1,6 +1,6 @@
 use crate::DEFAULT_UNIT;
 use crate::account::{AccountId, AccountType};
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorKind, Result};
 use crate::journal::JournalId;
 use crate::record::{
     Amount, Cost, Record, RecordId, RecordItemKind, RecordItemTransaction, RecordItemValidation,
@@ -15,7 +15,6 @@ pub struct CostInput(String);
 
 impl TryFrom<CostInput> for Cost {
     type Error = Error;
-
     fn try_from(value: CostInput) -> Result<Self> {
         if let Ok(date) = value.0.parse() {
             Ok(Cost::Date(date))
@@ -46,24 +45,27 @@ impl Default for AmountInput {
 
 impl TryFrom<AmountInput> for Amount {
     type Error = Error;
-
     fn try_from(value: AmountInput) -> Result<Self> {
         let split = value.0.split_whitespace().collect::<Vec<_>>();
         let [amount, unit] = split.as_slice() else {
-            return Err(Error::invalid_format(value.0));
+            return Err(ErrorKind::invalid_format(value.0));
         };
 
         let amount = amount
             .parse::<Decimal>()
-            .map_err(|_| Error::invalid_format(amount))?;
-        let unit = unit
-            .parse::<NonEmpty<String>>()
-            .map_err(|e: Error| e.with_resource_type(Amount::TYPE).with_field("unit"))?;
+            .map_err(|_| ErrorKind::invalid_format(amount))?;
+        let unit = unit.parse::<NonEmpty<String>>().map_err(|e| {
+            e.with_resource_type(Amount::TYPE)
+                .with_field("unit")
+                .convert()
+        })?;
 
         Ok(Amount {
-            amount: amount
-                .try_into()
-                .map_err(|e: Error| e.with_resource_type(Amount::TYPE).with_field("amount"))?,
+            amount: amount.try_into().map_err(|e: shared::Error| {
+                e.with_resource_type(Amount::TYPE)
+                    .with_field("amount")
+                    .convert()
+            })?,
             unit,
         })
     }
@@ -95,10 +97,9 @@ impl Default for RecordItemInput {
 
 impl TryFrom<Vec<RecordItemInput>> for RecordItems {
     type Error = Error;
-
     fn try_from(value: Vec<RecordItemInput>) -> Result<Self> {
         match value.first().map(|item| item.kind) {
-            None => Err(Error::non_empty()
+            None => Err(ErrorKind::non_empty()
                 .with_resource_type(Record::TYPE)
                 .with_field("items")),
             Some(RecordItemKind::Transaction)
@@ -124,8 +125,11 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(RecordItems::Transactions(
-                    NonEmpty::try_from(transactions)
-                        .map_err(|e| e.with_resource_type(Record::TYPE).with_field("items"))?,
+                    NonEmpty::try_from(transactions).map_err(|e| {
+                        e.with_resource_type(Record::TYPE)
+                            .with_field("items")
+                            .convert()
+                    })?,
                 ))
             }
             Some(RecordItemKind::Validation)
@@ -144,11 +148,14 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(RecordItems::Validations(
-                    NonEmpty::try_from(validations)
-                        .map_err(|e| e.with_resource_type(Record::TYPE).with_field("items"))?,
+                    NonEmpty::try_from(validations).map_err(|e| {
+                        e.with_resource_type(Record::TYPE)
+                            .with_field("items")
+                            .convert()
+                    })?,
                 ))
             }
-            _ => Err(Error::conflicting_values(&[
+            _ => Err(ErrorKind::conflicting_values(&[
                 RecordItemKind::Transaction.to_string(),
                 RecordItemKind::Validation.to_string(),
             ])
@@ -174,7 +181,6 @@ pub struct RecordInput {
 
 impl TryFrom<RecordInput> for Record {
     type Error = Error;
-
     fn try_from(value: RecordInput) -> Result<Self> {
         let items = RecordItems::try_from(value.items)?;
         let tags = value
