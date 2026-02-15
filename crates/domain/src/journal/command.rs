@@ -10,6 +10,7 @@ pub enum JournalCommand {
     Create(JournalCommandCreate),
     Update(JournalCommandUpdate),
     Delete(HashSet<JournalId>),
+    Batch(JournalCommandBatch),
 }
 
 impl Command for JournalCommand {
@@ -18,6 +19,7 @@ impl Command for JournalCommand {
             JournalCommand::Create(command) => command.command_type(),
             JournalCommand::Update(command) => command.command_type(),
             JournalCommand::Delete(_) => "whiterabbit::command::JournalCommandDelete",
+            JournalCommand::Batch(command) => command.command_type(),
         }
     }
 }
@@ -46,5 +48,18 @@ pub struct JournalCommandUpdate {
 impl Command for JournalCommandUpdate {
     fn command_type(&self) -> &'static str {
         "whiterabbit::command::JournalCommandUpdate"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct JournalCommandBatch {
+    pub create: Vec<JournalCommandCreate>,
+    pub update: Vec<JournalCommandUpdate>,
+    pub delete: HashSet<JournalId>,
+}
+
+impl Command for JournalCommandBatch {
+    fn command_type(&self) -> &'static str {
+        "whiterabbit::command::JournalCommandBatch"
     }
 }
