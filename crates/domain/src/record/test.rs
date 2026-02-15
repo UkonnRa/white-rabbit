@@ -1,10 +1,11 @@
 use crate::{
     account::{AccountId, AccountType},
     journal::JournalId,
-    record::{Amount, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind},
 };
 use chrono::NaiveDate;
 use shared::{EntityId, ErrorKind};
+
+use super::{Amount, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind};
 
 #[test]
 fn test_is_balanced_simple_balanced() {
@@ -425,27 +426,6 @@ fn test_error_mixed_item_kinds_returns_conflicting_values() {
         }
         other => panic!("expected ConflictingValues, got {other:?}"),
     }
-}
-
-#[test]
-fn test_error_empty_tag_returns_non_empty_with_tags_field() {
-    let items = vec![RecordItemInput {
-        account_type: AccountType::Asset,
-        kind: RecordItemKind::Transaction,
-        amount: "100 USD".into(),
-        ..Default::default()
-    }];
-    let result: Result<Record, _> = RecordInput {
-        items,
-        tags: vec!["valid-tag".to_string(), "".to_string()],
-        ..Default::default()
-    }
-    .try_into();
-
-    let err = result.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NonEmpty);
-    assert_eq!(err.resource_type, Some(Record::TYPE));
-    assert_eq!(err.field.as_deref(), Some("tags"));
 }
 
 #[test]

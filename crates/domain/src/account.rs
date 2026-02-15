@@ -1,6 +1,13 @@
+mod input;
+#[cfg(test)]
+mod test;
+pub use input::*;
+
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared::DomainModel;
+use shared::{DomainModel, NonEmpty};
 
 use crate::journal::JournalId;
 
@@ -14,17 +21,24 @@ pub struct Account {
     pub last_modified_at: Option<DateTime<Utc>>,
     pub archived_at: Option<DateTime<Utc>>,
 
-    pub name: String,
-    pub description: String,
     pub journal_id: JournalId,
     pub parent_id: Option<AccountId>,
     // The type of children should be the same as the parent's type
     // For each Journal, we always have 5 roots: Asset, Liability, Equity, Income, Expense
     pub r#type: AccountType,
+
+    pub name: NonEmpty<String>,
+    pub description: String,
+    pub tags: HashSet<NonEmpty<String>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+impl Account {
+    pub const TYPE: &str = "whiterabbit::domain::Account";
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash, Default)]
 pub enum AccountType {
+    #[default]
     Asset,
     Liability,
     Equity,

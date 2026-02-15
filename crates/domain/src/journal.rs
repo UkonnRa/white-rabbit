@@ -1,6 +1,8 @@
 //! Journal is a collection of [`crate::account::Account`]
 
 mod input;
+#[cfg(test)]
+mod test;
 use std::collections::HashSet;
 
 pub use input::*;

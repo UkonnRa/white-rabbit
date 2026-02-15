@@ -180,11 +180,8 @@ impl TryFrom<RecordInput> for Record {
         let tags = value
             .tags
             .into_iter()
-            .map(|tag| {
-                NonEmpty::try_from(tag)
-                    .map_err(|e| e.with_resource_type(Record::TYPE).with_field("tags"))
-            })
-            .collect::<Result<HashSet<_>>>()?;
+            .filter_map(|tag| NonEmpty::try_from(tag).ok())
+            .collect::<HashSet<_>>();
 
         Ok(Record {
             id: value.id,
