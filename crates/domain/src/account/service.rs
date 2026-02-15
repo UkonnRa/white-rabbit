@@ -4,8 +4,8 @@ use crate::account::command::{
 use crate::account::repository::AccountRepository;
 use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId, AccountInput};
-use crate::error::{ErrorKind, Result};
-use shared::RepositorySession;
+use crate::error::Result;
+use shared::{ErrorKind, RepositorySession};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -63,7 +63,7 @@ impl<R: AccountRepository> AccountService<R> {
         &self,
         sess: &mut R::Session,
         ids: impl IntoIterator<Item = impl Into<AccountId>>,
-    ) -> Result<Vec<Account>> {
+    ) -> Result<Vec<AccountId>> {
         Self::do_delete(
             &self.repository,
             sess,
@@ -144,7 +144,8 @@ impl<R: AccountRepository> AccountService<R> {
                 return Err(ErrorKind::conflict()
                     .with_resource_type(Account::TYPE)
                     .with_field("name")
-                    .with_detail(format!("'{}' is a reserved root account name", cmd.name)));
+                    .with_detail(format!("'{}' is a reserved root account name", cmd.name))
+                    .convert());
             }
         }
 
@@ -161,17 +162,18 @@ impl<R: AccountRepository> AccountService<R> {
                     .with_resource_type(Account::TYPE)
                     .with_field("parent_id")
                     .with_detail(format!("parent {} not found", cmd.parent_id))
+                    .convert()
             })?;
             if parent.is_archived() {
                 return Err(ErrorKind::conflict()
                     .with_resource_type(Account::TYPE)
                     .with_field("parent_id")
-                    .with_detail(format!("parent {} is archived", cmd.parent_id)));
+                    .with_detail(format!("parent {} is archived", cmd.parent_id))
+                    .convert());
             }
         }
 
         // 3. Check name uniqueness among siblings (per parent)
-        // Group commands by parent_id, check for dups within each group
         let mut names_by_parent: HashMap<&AccountId, HashSet<&str>> = HashMap::new();
         for cmd in &commands {
             if !names_by_parent
@@ -181,7 +183,8 @@ impl<R: AccountRepository> AccountService<R> {
             {
                 return Err(ErrorKind::duplicate_values(&cmd.name)
                     .with_resource_type(Account::TYPE)
-                    .with_field("name"));
+                    .with_field("name")
+                    .convert());
             }
         }
 
@@ -192,7 +195,8 @@ impl<R: AccountRepository> AccountService<R> {
             if let Some(existing) = repo.find_one(sess, &spec).await.map_err(|e| e.convert())? {
                 return Err(ErrorKind::duplicate_values(&existing.name)
                     .with_resource_type(Account::TYPE)
-                    .with_field("name"));
+                    .with_field("name")
+                    .convert());
             }
         }
 
@@ -235,7 +239,8 @@ impl<R: AccountRepository> AccountService<R> {
         if batch_ids.len() != commands.len() {
             return Err(ErrorKind::duplicate_values("id")
                 .with_resource_type(Account::TYPE)
-                .with_field("id"));
+                .with_field("id")
+                .convert());
         }
 
         // 2. Fetch existing accounts
@@ -250,7 +255,8 @@ impl<R: AccountRepository> AccountService<R> {
                 return Err(ErrorKind::not_found()
                     .with_resource_type(Account::TYPE)
                     .with_field("id")
-                    .with_detail(format!("account {id} not found")));
+                    .with_detail(format!("account {id} not found"))
+                    .convert());
             }
         }
 
@@ -260,22 +266,22 @@ impl<R: AccountRepository> AccountService<R> {
                 return Err(ErrorKind::conflict()
                     .with_resource_type(Account::TYPE)
                     .with_field("name")
-                    .with_detail(format!("'{}' is a reserved root account name", cmd.name)));
+                    .with_detail(format!("'{}' is a reserved root account name", cmd.name))
+                    .convert());
             }
         }
 
         // 4. Check name uniqueness among siblings (same parent), with swap support
-        // Group by parent_id, then check each group
         let mut new_names: HashSet<&str> = HashSet::new();
         for cmd in &commands {
             if !cmd.name.is_empty() && !new_names.insert(&cmd.name) {
                 return Err(ErrorKind::duplicate_values(&cmd.name)
                     .with_resource_type(Account::TYPE)
-                    .with_field("name"));
+                    .with_field("name")
+                    .convert());
             }
         }
 
-        // For each command with a new name, check against existing siblings NOT in this batch
         for cmd in &commands {
             if cmd.name.is_empty() {
                 continue;
@@ -292,7 +298,8 @@ impl<R: AccountRepository> AccountService<R> {
                     if !batch_ids.contains(conflict_id) {
                         return Err(ErrorKind::duplicate_values(&conflict.name)
                             .with_resource_type(Account::TYPE)
-                            .with_field("name"));
+                            .with_field("name")
+                            .convert());
                     }
                 }
             }
@@ -346,7 +353,7 @@ impl<R: AccountRepository> AccountService<R> {
         repo: &R,
         sess: &mut R::Session,
         ids: HashSet<AccountId>,
-    ) -> Result<Vec<Account>> {
+    ) -> Result<Vec<AccountId>> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -373,7 +380,7 @@ impl<R: AccountRepository> AccountService<R> {
             .delete_all_by_ids(sess, &ids_vec)
             .await
             .map_err(|e| e.convert())?;
-        Ok(deleted.into_values().collect())
+        Ok(deleted)
     }
 
     async fn do_archive(

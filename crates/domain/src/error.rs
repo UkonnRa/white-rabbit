@@ -29,49 +29,15 @@ impl shared::ErrorKindInfo for ErrorKind {
 }
 
 // ── Convenience constructors ─────────────────────────────────────
+//
+// DO NOT duplicate `shared::ErrorKind` convenience constructors here.
+// For shared error variants (NotFound, DuplicateValues, Conflict, etc.),
+// use `shared::ErrorKind::xxx().convert()` at the call site instead.
+//
+// Only domain-specific error kinds that don't exist in `shared` should
+// have constructors here.
 
 impl ErrorKind {
-    pub fn non_empty() -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::NonEmpty))
-    }
-
-    pub fn non_negative(actual: impl fmt::Display) -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::NonNegative {
-            actual: actual.to_string(),
-        }))
-    }
-
-    pub fn invalid_format(value: impl fmt::Display) -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::InvalidFormat {
-            value: value.to_string(),
-        }))
-    }
-
-    pub fn conflicting_values(values: &[impl fmt::Display]) -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::ConflictingValues {
-            values: values.iter().map(|v| v.to_string()).collect(),
-        }))
-    }
-
-    pub fn not_found() -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::NotFound))
-    }
-
-    pub fn internal(msg: impl fmt::Display) -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::Internal))
-            .with_detail(msg.to_string())
-    }
-
-    pub fn duplicate_values(value: impl fmt::Display) -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::DuplicateValues {
-            value: value.to_string(),
-        }))
-    }
-
-    pub fn conflict() -> Error {
-        shared::ContextualError::new(Self::Shared(shared::ErrorKind::Conflict))
-    }
-
     pub fn mismatch(expected: impl fmt::Display, actual: impl fmt::Display) -> Error {
         shared::ContextualError::new(Self::Mismatch {
             expected: expected.to_string(),

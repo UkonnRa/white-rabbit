@@ -10,7 +10,6 @@ use domain::account::command::{AccountCommandArchive, AccountCommandCreate, Acco
 use domain::account::service::AccountService;
 use domain::account::{Account, AccountId, AccountInput, AccountType};
 use domain::journal::JournalId;
-use shared::EntityId;
 
 use super::SeaOrmAccountRepository;
 

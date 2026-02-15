@@ -7,7 +7,7 @@ use domain::account::command::{
     AccountCommandArchive, AccountCommandBatch, AccountCommandCreate, AccountCommandUpdate,
 };
 use domain::account::service::AccountService;
-use domain::account::{Account, AccountId, AccountInput, AccountType};
+use domain::account::{AccountId, AccountType};
 use domain::journal::JournalId;
 use shared::EntityId;
 
@@ -321,7 +321,7 @@ async fn test_archive_cascades_to_children() -> anyhow::Result<()> {
         .await?;
     let parent_id = parent[0].id.clone();
 
-    let children = service
+    service
         .create(
             &mut sess,
             [

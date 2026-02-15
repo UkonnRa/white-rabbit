@@ -329,7 +329,7 @@ impl WriteRepository<AccountSpec> for SeaOrmAccountRepository {
         &self,
         sess: &mut Self::Session,
         ids: &[Id<Account>],
-    ) -> Result<HashMap<Id<Account>, Account>> {
+    ) -> Result<Vec<Id<Account>>> {
         self.__delete_all_by_ids(sess, ids).await
     }
 }

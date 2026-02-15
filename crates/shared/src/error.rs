@@ -192,6 +192,10 @@ impl ErrorKind {
         ContextualError::new(Self::NotFound)
     }
 
+    pub fn conflict() -> Error {
+        ContextualError::new(Self::Conflict)
+    }
+
     pub fn internal(msg: impl fmt::Display) -> Error {
         ContextualError::new(Self::Internal).with_detail(msg.to_string())
     }

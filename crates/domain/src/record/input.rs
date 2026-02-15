@@ -1,6 +1,6 @@
 use crate::DEFAULT_UNIT;
 use crate::account::{AccountId, AccountType};
-use crate::error::{Error, ErrorKind, Result};
+use crate::error::{Error, Result};
 use crate::journal::JournalId;
 use crate::record::{
     Amount, Cost, Record, RecordId, RecordItemKind, RecordItemTransaction, RecordItemValidation,
@@ -48,12 +48,12 @@ impl TryFrom<AmountInput> for Amount {
     fn try_from(value: AmountInput) -> Result<Self> {
         let split = value.0.split_whitespace().collect::<Vec<_>>();
         let [amount, unit] = split.as_slice() else {
-            return Err(ErrorKind::invalid_format(value.0));
+            return Err(shared::ErrorKind::invalid_format(value.0).convert());
         };
 
         let amount = amount
             .parse::<Decimal>()
-            .map_err(|_| ErrorKind::invalid_format(amount))?;
+            .map_err(|_| shared::ErrorKind::invalid_format(amount).convert())?;
         let unit = unit.parse::<NonEmpty<String>>().map_err(|e| {
             e.with_resource_type(Amount::TYPE)
                 .with_field("unit")
@@ -99,9 +99,10 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
     type Error = Error;
     fn try_from(value: Vec<RecordItemInput>) -> Result<Self> {
         match value.first().map(|item| item.kind) {
-            None => Err(ErrorKind::non_empty()
+            None => Err(shared::ErrorKind::non_empty()
                 .with_resource_type(Record::TYPE)
-                .with_field("items")),
+                .with_field("items")
+                .convert()),
             Some(RecordItemKind::Transaction)
                 if value
                     .iter()
@@ -155,12 +156,13 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     })?,
                 ))
             }
-            _ => Err(ErrorKind::conflicting_values(&[
+            _ => Err(shared::ErrorKind::conflicting_values(&[
                 RecordItemKind::Transaction.to_string(),
                 RecordItemKind::Validation.to_string(),
             ])
             .with_resource_type(Record::TYPE)
-            .with_field("items")),
+            .with_field("items")
+            .convert()),
         }
     }
 }

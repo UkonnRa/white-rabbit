@@ -407,7 +407,7 @@ fn test_error_mixed_item_kinds_returns_conflicting_values() {
 
 #[test]
 fn test_error_display_delegates_to_inner_error() {
-    let err = ErrorKind::non_negative("-5")
+    let err = shared::ErrorKind::non_negative("-5")
         .with_resource_type(Record::TYPE)
         .with_field("amount");
     // Display delegates to the inner error only; context is accessed programmatically

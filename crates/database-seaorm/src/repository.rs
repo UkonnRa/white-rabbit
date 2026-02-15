@@ -258,23 +258,30 @@ pub trait SeaOrmWriteRepository<S: Specification>: SeaOrmReadRepository<S> {
         &self,
         sess: &mut SeaOrmSession,
         ids: &[Id<Self::Entity>],
-    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
+    ) -> Result<Vec<Id<Self::Entity>>> {
         if ids.is_empty() {
-            return Ok(HashMap::new());
+            return Ok(vec![]);
         }
 
+        // Check which IDs actually exist
         let existing = self.__find_all_by_ids(sess, ids).await?;
+        let existing_ids: Vec<_> = existing.keys().cloned().collect();
 
-        self.delete_all_related(sess, ids)
+        if existing_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        self.delete_all_related(sess, &existing_ids)
             .await
             .map_err(shared::ErrorKind::internal)?;
 
-        let values: Vec<sea_orm::Value> = ids.iter().map(|id| self.id_to_value(id)).collect();
+        let values: Vec<sea_orm::Value> =
+            existing_ids.iter().map(|id| self.id_to_value(id)).collect();
         sess.exec_delete(Self::SeaOrmEntity::delete_many().filter(self.pk_column().is_in(values)))
             .await
             .map_err(shared::ErrorKind::internal)?;
 
-        Ok(existing)
+        Ok(existing_ids)
     }
 
     fn updatable_columns(&self) -> Vec<<Self::SeaOrmEntity as EntityTrait>::Column>;

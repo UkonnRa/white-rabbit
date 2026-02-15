@@ -110,12 +110,11 @@ pub trait InMemoryWriteRepository<S: Specification>: InMemoryReadRepository<S> {
         &self,
         sess: &mut InMemorySession<Self::Persistence>,
         ids: &[Id<Self::Entity>],
-    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
-        let mut deleted: HashMap<Id<Self::Entity>, Self::Entity> = HashMap::new();
+    ) -> Result<Vec<Id<Self::Entity>>> {
+        let mut deleted = Vec::new();
         for id in ids {
-            if let Some(po) = sess.storage.remove(id.value()) {
-                let entity = self.convert_to_entity(po);
-                deleted.insert(entity.id().clone(), entity);
+            if sess.storage.remove(id.value()).is_some() {
+                deleted.push(id.clone());
             }
         }
         Ok(deleted)

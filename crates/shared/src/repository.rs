@@ -65,7 +65,9 @@ pub trait ReadRepository<S: Specification>: Send + Sync {
             .cloned())
     }
 
-    /// Find all entities matching the specification with optional limit
+    /// Find all entities matching the specification with optional limit.
+    ///
+    /// TODO: Add pagination support (offset/cursor) for large result sets.
     async fn find_all(
         &self,
         sess: &Self::Session,
@@ -92,32 +94,27 @@ pub trait WriteRepository<S: Specification>: ReadRepository<S> {
             .ok_or_else(ErrorKind::not_found)
     }
 
-    /// Delete entities by their IDs and return the deleted entities
+    /// Delete entities by their IDs and return the IDs that were actually deleted.
     async fn delete_all_by_ids(
         &self,
         sess: &mut Self::Session,
         ids: &[Id<Self::Entity>],
-    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>>;
+    ) -> Result<Vec<Id<Self::Entity>>>;
 
-    /// Delete a single entity by ID and return it
-    async fn delete(
-        &self,
-        sess: &mut Self::Session,
-        id: &Id<Self::Entity>,
-    ) -> Result<Option<Self::Entity>> {
-        Ok(self
+    /// Delete a single entity by ID. Returns true if the entity existed and was deleted.
+    async fn delete(&self, sess: &mut Self::Session, id: &Id<Self::Entity>) -> Result<bool> {
+        Ok(!self
             .delete_all_by_ids(sess, array::from_ref(id))
             .await?
-            .into_values()
-            .next())
+            .is_empty())
     }
 
-    /// Delete all given entities and return the deleted entities
+    /// Delete all given entities and return the IDs that were actually deleted.
     async fn delete_all(
         &self,
         sess: &mut Self::Session,
         entities: &[Self::Entity],
-    ) -> Result<HashMap<Id<Self::Entity>, Self::Entity>> {
+    ) -> Result<Vec<Id<Self::Entity>>> {
         let ids: Vec<_> = entities.iter().map(|e| e.id().clone()).collect();
         self.delete_all_by_ids(sess, &ids).await
     }

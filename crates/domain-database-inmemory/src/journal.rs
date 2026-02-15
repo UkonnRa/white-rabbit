@@ -142,7 +142,7 @@ impl WriteRepository<JournalSpec> for InMemoryJournalRepository {
         &self,
         sess: &mut Self::Session,
         ids: &[Id<Journal>],
-    ) -> Result<HashMap<Id<Journal>, Journal>> {
+    ) -> Result<Vec<Id<Journal>>> {
         self.__delete_all_by_ids(sess, ids).await
     }
 }

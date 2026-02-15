@@ -98,7 +98,7 @@ impl<R: JournalRepository> JournalService<R> {
         &self,
         sess: &mut R::Session,
         ids: impl IntoIterator<Item = impl Into<JournalId>>,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalId>> {
         Self::do_delete(
             &self.repository,
             sess,
@@ -305,12 +305,12 @@ impl<R: JournalRepository> JournalService<R> {
         repo: &R,
         sess: &mut R::Session,
         ids: HashSet<JournalId>,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalId>> {
         let ids: Vec<_> = ids.into_iter().collect();
         let deleted = repo
             .delete_all_by_ids(sess, &ids)
             .await
             .map_err(|e| e.convert())?;
-        Ok(deleted.into_values().collect())
+        Ok(deleted)
     }
 }

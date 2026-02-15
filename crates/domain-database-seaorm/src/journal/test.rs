@@ -254,7 +254,7 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
 
     let deleted = service.delete(&mut sess, [id.clone()]).await?;
     assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0].name.to_string(), "ToDelete");
+    assert_eq!(deleted[0], id);
 
     let recreated = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
     assert_eq!(recreated.len(), 1);

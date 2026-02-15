@@ -458,7 +458,7 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
 
     let deleted = service.delete(&mut sess, [id.clone()]).await?;
     assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0].name.to_string(), "ToDelete");
+    assert_eq!(deleted[0], id);
 
     let recreated = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
     assert_eq!(recreated.len(), 1);
@@ -511,7 +511,6 @@ async fn test_delete_duplicate_ids_are_deduplicated() -> anyhow::Result<()> {
 
     let deleted = service.delete(&mut sess, [id.clone(), id]).await?;
     assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0].name.to_string(), "Journal");
 
     Ok(())
 }
@@ -524,10 +523,10 @@ async fn test_delete_mixed_existing_and_nonexistent_ids() -> anyhow::Result<()> 
     let existing_id = created[0].id.clone();
 
     let deleted = service
-        .delete(&mut sess, [existing_id, JournalId::from("fake")])
+        .delete(&mut sess, [existing_id.clone(), JournalId::from("fake")])
         .await?;
     assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0].name.to_string(), "Exists");
+    assert_eq!(deleted[0], existing_id);
 
     Ok(())
 }

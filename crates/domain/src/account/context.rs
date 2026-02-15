@@ -24,10 +24,11 @@ impl AccountContext {
         let mut current = &self.entity;
         while let Some(parent_id) = &current.parent_id {
             let parent = self.accounts.get(parent_id).ok_or_else(|| {
-                ErrorKind::not_found()
+                shared::ErrorKind::not_found()
                     .with_resource_type(Account::TYPE)
                     .with_field("parent_id")
                     .with_detail(format!("parent {} not found", parent_id.as_ref()))
+                    .convert()
             })?;
 
             if current.r#type != parent.r#type {
@@ -47,13 +48,14 @@ impl AccountContext {
             && let Some(parent) = self.accounts.get(parent_id)
             && parent.is_archived()
         {
-            return Err(ErrorKind::conflict()
+            return Err(shared::ErrorKind::conflict()
                 .with_resource_type(Account::TYPE)
                 .with_field("parent_id")
                 .with_detail(format!(
                     "parent {} is archived; cannot create child under archived account",
                     parent_id.as_ref()
-                )));
+                ))
+                .convert());
         }
         Ok(())
     }
@@ -64,13 +66,14 @@ impl AccountContext {
         if self.entity.parent_id.is_some()
             && Account::is_reserved_name(&self.entity.name.to_string())
         {
-            return Err(ErrorKind::conflict()
+            return Err(shared::ErrorKind::conflict()
                 .with_resource_type(Account::TYPE)
                 .with_field("name")
                 .with_detail(format!(
                     "'{}' is a reserved root account name",
                     self.entity.name
-                )));
+                ))
+                .convert());
         }
         Ok(())
     }
