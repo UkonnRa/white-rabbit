@@ -456,9 +456,7 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
     let created = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
     let id = created[0].id.clone();
 
-    let deleted = service.delete(&mut sess, [id.clone()]).await?;
-    assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0], id);
+    service.delete(&mut sess, [id]).await?;
 
     let recreated = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
     assert_eq!(recreated.len(), 1);
@@ -478,8 +476,7 @@ async fn test_delete_batch_multiple_journals() -> anyhow::Result<()> {
         .await?;
 
     let ids: Vec<_> = created.iter().map(|j| j.id.clone()).collect();
-    let deleted = service.delete(&mut sess, ids).await?;
-    assert_eq!(deleted.len(), 3);
+    service.delete(&mut sess, ids).await?;
 
     Ok(())
 }
@@ -487,18 +484,16 @@ async fn test_delete_batch_multiple_journals() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_delete_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    let deleted = service.delete(&mut sess, Vec::<JournalId>::new()).await?;
-    assert!(deleted.is_empty());
+    service.delete(&mut sess, Vec::<JournalId>::new()).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_delete_nonexistent_id_is_silently_ignored() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    let deleted = service
+    service
         .delete(&mut sess, [JournalId::from("nonexistent")])
         .await?;
-    assert!(deleted.is_empty());
     Ok(())
 }
 
@@ -509,8 +504,7 @@ async fn test_delete_duplicate_ids_are_deduplicated() -> anyhow::Result<()> {
     let created = service.create(&mut sess, [create_cmd("Journal")]).await?;
     let id = created[0].id.clone();
 
-    let deleted = service.delete(&mut sess, [id.clone(), id]).await?;
-    assert_eq!(deleted.len(), 1);
+    service.delete(&mut sess, [id.clone(), id]).await?;
 
     Ok(())
 }
@@ -522,11 +516,9 @@ async fn test_delete_mixed_existing_and_nonexistent_ids() -> anyhow::Result<()> 
     let created = service.create(&mut sess, [create_cmd("Exists")]).await?;
     let existing_id = created[0].id.clone();
 
-    let deleted = service
+    service
         .delete(&mut sess, [existing_id.clone(), JournalId::from("fake")])
         .await?;
-    assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0], existing_id);
 
     Ok(())
 }

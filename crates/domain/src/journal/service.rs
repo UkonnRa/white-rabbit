@@ -1,9 +1,11 @@
-use crate::journal::command::{JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate};
+use crate::journal::command::{
+    JournalCommand, JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate,
+};
 use crate::journal::repository::JournalRepository;
 use crate::journal::specification::JournalSpecification;
 use crate::journal::{JournalId, JournalInput};
 use crate::{error::Result, journal::Journal};
-use shared::{ErrorKind, RepositorySession};
+use shared::{ErrorKind, RepositorySession, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -89,16 +91,11 @@ impl<R: JournalRepository> JournalService<R> {
     /// any existing journal are silently ignored — this is intentional to
     /// prevent ID-guessing attacks from inferring which IDs exist via error
     /// responses.
-    ///
-    /// # Returns
-    ///
-    /// The deleted [`Journal`] list as they were before deletion.
-    /// Only journals that actually existed are included.
     pub async fn delete(
         &self,
         sess: &mut R::Session,
         ids: impl IntoIterator<Item = impl Into<JournalId>>,
-    ) -> Result<Vec<JournalId>> {
+    ) -> Result<()> {
         Self::do_delete(
             &self.repository,
             sess,
@@ -301,16 +298,34 @@ impl<R: JournalRepository> JournalService<R> {
         Ok(saved.into_values().collect())
     }
 
-    async fn do_delete(
-        repo: &R,
-        sess: &mut R::Session,
-        ids: HashSet<JournalId>,
-    ) -> Result<Vec<JournalId>> {
+    async fn do_delete(repo: &R, sess: &mut R::Session, ids: HashSet<JournalId>) -> Result<()> {
         let ids: Vec<_> = ids.into_iter().collect();
-        let deleted = repo
-            .delete_all_by_ids(sess, &ids)
+        repo.delete_all_by_ids(sess, &ids)
             .await
             .map_err(|e| e.convert())?;
-        Ok(deleted)
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
+    type Entity = Journal;
+    type Session = R::Session;
+    type Error = crate::error::Error;
+
+    async fn handle(
+        &self,
+        sess: &mut Self::Session,
+        command: JournalCommand,
+    ) -> Result<Vec<Journal>> {
+        match command {
+            JournalCommand::Create(cmd) => self.create(sess, [cmd]).await,
+            JournalCommand::Update(cmd) => self.update(sess, [cmd]).await,
+            JournalCommand::Delete(ids) => {
+                self.delete(sess, ids).await?;
+                Ok(vec![])
+            }
+            JournalCommand::Batch(cmd) => self.batch(sess, cmd).await,
+        }
     }
 }

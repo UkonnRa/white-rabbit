@@ -192,8 +192,7 @@ async fn test_delete_cascades_to_children() -> anyhow::Result<()> {
         )
         .await?;
 
-    let deleted = service.delete(&mut sess, [parent_id]).await?;
-    assert_eq!(deleted.len(), 3); // parent + 2 children
+    service.delete(&mut sess, [parent_id]).await?;
 
     Ok(())
 }

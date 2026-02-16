@@ -252,9 +252,7 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
     let created = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
     let id = created[0].id.clone();
 
-    let deleted = service.delete(&mut sess, [id.clone()]).await?;
-    assert_eq!(deleted.len(), 1);
-    assert_eq!(deleted[0], id);
+    service.delete(&mut sess, [id]).await?;
 
     let recreated = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
     assert_eq!(recreated.len(), 1);
@@ -265,10 +263,9 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_delete_nonexistent_id_is_silently_ignored() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
-    let deleted = service
+    service
         .delete(&mut sess, [JournalId::from("nonexistent")])
         .await?;
-    assert!(deleted.is_empty());
     Ok(())
 }
 

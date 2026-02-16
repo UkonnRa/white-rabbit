@@ -290,8 +290,7 @@ async fn test_delete_cascades_to_children() -> anyhow::Result<()> {
         .await?;
 
     // Delete parent — children should be deleted too
-    let deleted = service.delete(&mut sess, [parent_id]).await?;
-    assert_eq!(deleted.len(), 3); // parent + 2 children
+    service.delete(&mut sess, [parent_id]).await?;
 
     Ok(())
 }
@@ -300,10 +299,9 @@ async fn test_delete_cascades_to_children() -> anyhow::Result<()> {
 async fn test_delete_nonexistent_is_silent() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let deleted = service
+    service
         .delete(&mut sess, [AccountId::from("nonexistent")])
         .await?;
-    assert!(deleted.is_empty());
 
     Ok(())
 }

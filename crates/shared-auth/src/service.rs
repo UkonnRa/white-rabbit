@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use crate::entity::AuthEntity;
 use crate::permission::Permission;
-use shared::{Entity, Id, ReadService, Result, Specification};
+use shared::{Entity, Id, Result, Specification};
 
 #[async_trait::async_trait]
-pub trait AuthReadService<S: Specification>: ReadService<S> {
+pub trait AuthReadService<S: Specification>: Send + Sync {
+    type Entity: Entity;
     type Operator: AuthEntity;
 
     async fn calculate_permission(

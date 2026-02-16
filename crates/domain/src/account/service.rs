@@ -1,11 +1,12 @@
 use crate::account::command::{
-    AccountCommandArchive, AccountCommandBatch, AccountCommandCreate, AccountCommandUpdate,
+    AccountCommand, AccountCommandArchive, AccountCommandBatch, AccountCommandCreate,
+    AccountCommandUpdate,
 };
 use crate::account::repository::AccountRepository;
 use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId, AccountInput};
 use crate::error::Result;
-use shared::{ErrorKind, RepositorySession};
+use shared::{ErrorKind, RepositorySession, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -63,7 +64,7 @@ impl<R: AccountRepository> AccountService<R> {
         &self,
         sess: &mut R::Session,
         ids: impl IntoIterator<Item = impl Into<AccountId>>,
-    ) -> Result<Vec<AccountId>> {
+    ) -> Result<()> {
         Self::do_delete(
             &self.repository,
             sess,
@@ -349,13 +350,9 @@ impl<R: AccountRepository> AccountService<R> {
         Ok(saved.into_values().collect())
     }
 
-    async fn do_delete(
-        repo: &R,
-        sess: &mut R::Session,
-        ids: HashSet<AccountId>,
-    ) -> Result<Vec<AccountId>> {
+    async fn do_delete(repo: &R, sess: &mut R::Session, ids: HashSet<AccountId>) -> Result<()> {
         if ids.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         // Collect all descendants to delete (cascade)
@@ -376,11 +373,10 @@ impl<R: AccountRepository> AccountService<R> {
         }
 
         let ids_vec: Vec<_> = all_ids.into_iter().collect();
-        let deleted = repo
-            .delete_all_by_ids(sess, &ids_vec)
+        repo.delete_all_by_ids(sess, &ids_vec)
             .await
             .map_err(|e| e.convert())?;
-        Ok(deleted)
+        Ok(())
     }
 
     async fn do_archive(
@@ -435,5 +431,29 @@ impl<R: AccountRepository> AccountService<R> {
             .await
             .map_err(|e| e.convert())?;
         Ok(saved.into_values().collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl<R: AccountRepository> WriteService<AccountCommand> for AccountService<R> {
+    type Entity = Account;
+    type Session = R::Session;
+    type Error = crate::error::Error;
+
+    async fn handle(
+        &self,
+        sess: &mut Self::Session,
+        command: AccountCommand,
+    ) -> Result<Vec<Account>> {
+        match command {
+            AccountCommand::Create(cmd) => self.create(sess, [cmd]).await,
+            AccountCommand::Update(cmd) => self.update(sess, [cmd]).await,
+            AccountCommand::Delete(ids) => {
+                self.delete(sess, ids).await?;
+                Ok(vec![])
+            }
+            AccountCommand::Archive(cmd) => self.archive(sess, cmd).await,
+            AccountCommand::Batch(cmd) => self.batch(sess, cmd).await,
+        }
     }
 }
