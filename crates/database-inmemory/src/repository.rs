@@ -18,7 +18,6 @@ pub struct InMemorySession {
     snapshot: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
 }
 
-
 impl InMemorySession {
     /// Get an immutable reference to the storage for a given entity type.
     pub fn get_storage(&self, entity_type: &str) -> Option<&HashMap<String, serde_json::Value>> {

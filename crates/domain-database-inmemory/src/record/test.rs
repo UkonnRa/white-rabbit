@@ -824,3 +824,636 @@ async fn test_batch_rollback_on_update_failure() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+// ── Specification tests ──────────────────────────────────────────
+
+use domain::record::specification::RecordSpecification;
+use shared::ReadRepository;
+
+#[tokio::test]
+async fn test_spec_find_by_id() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let created = service
+        .create(
+            &mut sess,
+            [
+                create_cmd(
+                    &jid,
+                    vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                ),
+                create_cmd(
+                    &jid,
+                    vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                ),
+            ],
+        )
+        .await?;
+    let id0 = created[0].id.clone();
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::id(id0.clone()), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert!(found.contains_key(&id0));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_journal_id() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "10 USD"),
+                    transaction_item(&expense_id, "10 USD"),
+                ],
+            )],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::journal_id(jid.clone()), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found_other = repo
+        .find_all(&sess, &RecordSpecification::journal_id("other"), None)
+        .await?;
+    assert!(found_other.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_account_id() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
+
+    // Record 1 uses asset + expense
+    service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "10 USD"),
+                    transaction_item(&expense_id, "10 USD"),
+                ],
+            )],
+        )
+        .await?;
+    // Record 2 uses asset + equity
+    service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "20 USD"),
+                    transaction_item(&equity_id, "20 USD"),
+                ],
+            )],
+        )
+        .await?;
+
+    // Both records reference asset
+    let found = repo
+        .find_all(
+            &sess,
+            &RecordSpecification::account_id(asset_id.clone()),
+            None,
+        )
+        .await?;
+    assert_eq!(found.len(), 2);
+
+    // Only record 1 references expense
+    let found = repo
+        .find_all(
+            &sess,
+            &RecordSpecification::account_id(expense_id.clone()),
+            None,
+        )
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_date() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let jan15 = chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+    let feb1 = chrono::NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
+
+    service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "10 USD"),
+                    transaction_item(&expense_id, "10 USD"),
+                ],
+            )],
+        )
+        .await?;
+    service
+        .create(
+            &mut sess,
+            [RecordCommandCreate {
+                journal_id: jid.clone(),
+                date: feb1,
+                kind: RecordItemKind::Transaction,
+                items: vec![
+                    transaction_item(&asset_id, "20 USD"),
+                    transaction_item(&expense_id, "20 USD"),
+                ],
+                description: String::new(),
+                tags: HashSet::new(),
+                payee: String::new(),
+            }],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::date(jan15), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::date(feb1), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_date_range() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let jan15 = chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+    let feb1 = chrono::NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
+    let mar1 = chrono::NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
+
+    for date in [jan15, feb1, mar1] {
+        service
+            .create(
+                &mut sess,
+                [RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date,
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: String::new(),
+                }],
+            )
+            .await?;
+    }
+
+    // DateFrom feb1 -> feb1, mar1
+    let found = repo
+        .find_all(&sess, &RecordSpecification::date_from(feb1), None)
+        .await?;
+    assert_eq!(found.len(), 2);
+
+    // DateTo feb1 -> jan15, feb1
+    let found = repo
+        .find_all(&sess, &RecordSpecification::date_to(feb1), None)
+        .await?;
+    assert_eq!(found.len(), 2);
+
+    // DateFrom AND DateTo -> just feb1
+    let spec = RecordSpecification::date_from(feb1) & RecordSpecification::date_to(feb1);
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_payee() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    service
+        .create(
+            &mut sess,
+            [
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Cafe".to_string(),
+                },
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Grocery".to_string(),
+                },
+            ],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::payee("Cafe"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_tag() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    service
+        .create(
+            &mut sess,
+            [RecordCommandCreate {
+                journal_id: jid.clone(),
+                date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                kind: RecordItemKind::Transaction,
+                items: vec![
+                    transaction_item(&asset_id, "10 USD"),
+                    transaction_item(&expense_id, "10 USD"),
+                ],
+                description: String::new(),
+                tags: HashSet::from(["food".to_string(), "lunch".to_string()]),
+                payee: String::new(),
+            }],
+        )
+        .await?;
+    service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "20 USD"),
+                    transaction_item(&expense_id, "20 USD"),
+                ],
+            )],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::tag("food"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(&sess, &RecordSpecification::tag("nonexistent"), None)
+        .await?;
+    assert!(found.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_item_kind() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    // Transaction record
+    service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "10 USD"),
+                    transaction_item(&expense_id, "10 USD"),
+                ],
+            )],
+        )
+        .await?;
+    // Validation record
+    service
+        .create(
+            &mut sess,
+            [RecordCommandCreate {
+                journal_id: jid.clone(),
+                date: chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(),
+                kind: RecordItemKind::Validation,
+                items: vec![RecordCommandItem {
+                    account_id: asset_id.clone(),
+                    amount: "500 USD".to_string(),
+                    description: String::new(),
+                    price: None,
+                    cost: HashSet::new(),
+                }],
+                description: String::new(),
+                tags: HashSet::new(),
+                payee: String::new(),
+            }],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(
+            &sess,
+            &RecordSpecification::item_kind(RecordItemKind::Transaction),
+            None,
+        )
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(
+            &sess,
+            &RecordSpecification::item_kind(RecordItemKind::Validation),
+            None,
+        )
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_full_text() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    service
+        .create(
+            &mut sess,
+            [
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: "Lunch at the cafe".to_string(),
+                    tags: HashSet::new(),
+                    payee: "SomeCafe".to_string(),
+                },
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                    description: "Grocery shopping".to_string(),
+                    tags: HashSet::from(["weekly".to_string()]),
+                    payee: "Supermarket".to_string(),
+                },
+            ],
+        )
+        .await?;
+
+    // Match description
+    let found = repo
+        .find_all(&sess, &RecordSpecification::full_text("lunch"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    // Match payee
+    let found = repo
+        .find_all(&sess, &RecordSpecification::full_text("supermarket"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    // Match tag
+    let found = repo
+        .find_all(&sess, &RecordSpecification::full_text("weekly"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_all_and() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let jan15 = chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+
+    service
+        .create(
+            &mut sess,
+            [
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: jan15,
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Cafe".to_string(),
+                },
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: jan15,
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Grocery".to_string(),
+                },
+            ],
+        )
+        .await?;
+
+    // AND: date=jan15 AND payee=Cafe -> 1
+    let spec = RecordSpecification::date(jan15) & RecordSpecification::payee("Cafe");
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_any_or() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    service
+        .create(
+            &mut sess,
+            [
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Cafe".to_string(),
+                },
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Grocery".to_string(),
+                },
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "30 USD"),
+                        transaction_item(&expense_id, "30 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Restaurant".to_string(),
+                },
+            ],
+        )
+        .await?;
+
+    let spec = RecordSpecification::payee("Cafe") | RecordSpecification::payee("Restaurant");
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_not() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    service
+        .create(
+            &mut sess,
+            [
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Cafe".to_string(),
+                },
+                RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: "Grocery".to_string(),
+                },
+            ],
+        )
+        .await?;
+
+    let spec = !RecordSpecification::payee("Cafe");
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found.values().next().unwrap().payee, "Grocery");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_limit() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service();
+    let repo = InMemoryRecordRepository;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    for i in 0..5 {
+        service
+            .create(
+                &mut sess,
+                [RecordCommandCreate {
+                    journal_id: jid.clone(),
+                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15 + i).unwrap(),
+                    kind: RecordItemKind::Transaction,
+                    items: vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    payee: String::new(),
+                }],
+            )
+            .await?;
+    }
+
+    let spec = RecordSpecification::journal_id(jid);
+    let found = repo.find_all(&sess, &spec, Some(3)).await?;
+    assert_eq!(found.len(), 3);
+
+    Ok(())
+}

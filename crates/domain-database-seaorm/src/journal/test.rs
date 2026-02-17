@@ -406,3 +406,295 @@ async fn test_batch_rollback_on_update_failure() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+// ── Specification tests ──────────────────────────────────────────
+
+use domain::journal::specification::JournalSpecification;
+use shared::ReadRepository;
+
+#[tokio::test]
+async fn test_spec_find_by_id() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    let created = service
+        .create(&mut sess, [create_cmd("Alpha"), create_cmd("Beta")])
+        .await?;
+    let alpha_id = created
+        .iter()
+        .find(|j| j.name.to_string() == "Alpha")
+        .unwrap()
+        .id
+        .clone();
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::id(alpha_id.clone()), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert!(found.contains_key(&alpha_id));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_name() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(
+            &sess,
+            &JournalSpecification::names(["Alpha", "Gamma"]),
+            None,
+        )
+        .await?;
+    assert_eq!(found.len(), 2);
+    let names: HashSet<_> = found.values().map(|j| j.name.to_string()).collect();
+    assert!(names.contains("Alpha"));
+    assert!(names.contains("Gamma"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_tag() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [
+                JournalCommandCreate {
+                    name: "Personal".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["finance".to_string(), "personal".to_string()]),
+                },
+                JournalCommandCreate {
+                    name: "Business".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["finance".to_string(), "business".to_string()]),
+                },
+                create_cmd("NoTags"),
+            ],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::tag("personal"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found.values().next().unwrap().name.to_string(), "Personal");
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::tag("finance"), None)
+        .await?;
+    assert_eq!(found.len(), 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_full_text() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [
+                JournalCommandCreate {
+                    name: "My Ledger".to_string(),
+                    description: "Tracks personal spending".to_string(),
+                    tags: HashSet::new(),
+                },
+                JournalCommandCreate {
+                    name: "Work".to_string(),
+                    description: "Business expenses".to_string(),
+                    tags: HashSet::new(),
+                },
+                create_cmd("Empty"),
+            ],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::full_text("Ledger"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::full_text("personal"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_no_match_returns_empty() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service.create(&mut sess, [create_cmd("Alpha")]).await?;
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::name("Nonexistent"), None)
+        .await?;
+    assert!(found.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_all_and() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    let created = service
+        .create(
+            &mut sess,
+            [
+                JournalCommandCreate {
+                    name: "Alpha".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["tag1".to_string()]),
+                },
+                JournalCommandCreate {
+                    name: "Beta".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["tag1".to_string()]),
+                },
+                create_cmd("Gamma"),
+            ],
+        )
+        .await?;
+    let alpha_id = created
+        .iter()
+        .find(|j| j.name.to_string() == "Alpha")
+        .unwrap()
+        .id
+        .clone();
+
+    let spec = JournalSpecification::tag("tag1") & JournalSpecification::id(alpha_id.clone());
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 1);
+    assert!(found.contains_key(&alpha_id));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_any_or() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+        )
+        .await?;
+
+    let spec = JournalSpecification::name("Alpha") | JournalSpecification::name("Gamma");
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 2);
+    let names: HashSet<_> = found.values().map(|j| j.name.to_string()).collect();
+    assert!(names.contains("Alpha"));
+    assert!(names.contains("Gamma"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_not() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+        )
+        .await?;
+
+    let spec = !JournalSpecification::name("Alpha");
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 2);
+    let names: HashSet<_> = found.values().map(|j| j.name.to_string()).collect();
+    assert!(names.contains("Beta"));
+    assert!(names.contains("Gamma"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_nested_combination() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [
+                JournalCommandCreate {
+                    name: "Alpha".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["a".to_string()]),
+                },
+                JournalCommandCreate {
+                    name: "Beta".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["b".to_string()]),
+                },
+                JournalCommandCreate {
+                    name: "Gamma".to_string(),
+                    description: String::new(),
+                    tags: HashSet::from(["a".to_string()]),
+                },
+            ],
+        )
+        .await?;
+
+    // (tag=a AND name=Alpha) OR name=Beta -> Alpha, Beta
+    let spec = (JournalSpecification::tag("a") & JournalSpecification::name("Alpha"))
+        | JournalSpecification::name("Beta");
+    let found = repo.find_all(&sess, &spec, None).await?;
+    assert_eq!(found.len(), 2);
+    let names: HashSet<_> = found.values().map(|j| j.name.to_string()).collect();
+    assert!(names.contains("Alpha"));
+    assert!(names.contains("Beta"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_limit() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [
+                create_cmd("A"),
+                create_cmd("B"),
+                create_cmd("C"),
+                create_cmd("D"),
+            ],
+        )
+        .await?;
+
+    let spec = JournalSpecification::names(["A", "B", "C", "D"]);
+    let found = repo.find_all(&sess, &spec, Some(2)).await?;
+    assert_eq!(found.len(), 2);
+
+    Ok(())
+}
