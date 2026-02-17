@@ -1,4 +1,8 @@
+pub mod command;
 mod input;
+pub mod repository;
+pub mod service;
+pub mod specification;
 #[cfg(test)]
 mod test;
 mod value;
@@ -33,8 +37,6 @@ pub struct Record {
 }
 
 impl Record {
-    pub const TYPE: &str = "whiterabbit::domain::Record";
-
     // is the transaction record balanced? Balanced means Assets + Expenses = Liabilities + Equity + Income
     // if the record is Validations, return None
     // TODO: this is not correct, the cost, especially the currency exchange rate, should be recorded in another data structure.

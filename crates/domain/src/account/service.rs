@@ -6,7 +6,7 @@ use crate::account::repository::AccountRepository;
 use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId, AccountInput};
 use crate::error::Result;
-use shared::{ErrorKind, RepositorySession, WriteService};
+use shared::{Entity, ErrorKind, RepositorySession, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -143,7 +143,7 @@ impl<R: AccountRepository> AccountService<R> {
         for cmd in &commands {
             if Account::is_reserved_name(&cmd.name) {
                 return Err(ErrorKind::conflict()
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
                     .with_detail(format!("'{}' is a reserved root account name", cmd.name))
                     .convert());
@@ -160,14 +160,14 @@ impl<R: AccountRepository> AccountService<R> {
         for cmd in &commands {
             let parent = parents.get(&cmd.parent_id).ok_or_else(|| {
                 ErrorKind::not_found()
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("parent_id")
                     .with_detail(format!("parent {} not found", cmd.parent_id))
                     .convert()
             })?;
             if parent.is_archived() {
                 return Err(ErrorKind::conflict()
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("parent_id")
                     .with_detail(format!("parent {} is archived", cmd.parent_id))
                     .convert());
@@ -183,7 +183,7 @@ impl<R: AccountRepository> AccountService<R> {
                 .insert(&cmd.name)
             {
                 return Err(ErrorKind::duplicate_values(&cmd.name)
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
                     .convert());
             }
@@ -195,7 +195,7 @@ impl<R: AccountRepository> AccountService<R> {
                 & AccountSpecification::names(new_names.iter().copied());
             if let Some(existing) = repo.find_one(sess, &spec).await.map_err(|e| e.convert())? {
                 return Err(ErrorKind::duplicate_values(&existing.name)
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
                     .convert());
             }
@@ -239,7 +239,7 @@ impl<R: AccountRepository> AccountService<R> {
         let batch_ids: HashSet<_> = commands.iter().map(|c| &c.id).collect();
         if batch_ids.len() != commands.len() {
             return Err(ErrorKind::duplicate_values("id")
-                .with_resource_type(Account::TYPE)
+                .with_resource_type(Account::ENTITY_TYPE)
                 .with_field("id")
                 .convert());
         }
@@ -254,7 +254,7 @@ impl<R: AccountRepository> AccountService<R> {
         for id in &id_vec {
             if !existing.contains_key(id) {
                 return Err(ErrorKind::not_found()
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("id")
                     .with_detail(format!("account {id} not found"))
                     .convert());
@@ -265,7 +265,7 @@ impl<R: AccountRepository> AccountService<R> {
         for cmd in &commands {
             if !cmd.name.is_empty() && Account::is_reserved_name(&cmd.name) {
                 return Err(ErrorKind::conflict()
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
                     .with_detail(format!("'{}' is a reserved root account name", cmd.name))
                     .convert());
@@ -277,7 +277,7 @@ impl<R: AccountRepository> AccountService<R> {
         for cmd in &commands {
             if !cmd.name.is_empty() && !new_names.insert(&cmd.name) {
                 return Err(ErrorKind::duplicate_values(&cmd.name)
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
                     .convert());
             }
@@ -298,7 +298,7 @@ impl<R: AccountRepository> AccountService<R> {
                 for (conflict_id, conflict) in &conflicts {
                     if !batch_ids.contains(conflict_id) {
                         return Err(ErrorKind::duplicate_values(&conflict.name)
-                            .with_resource_type(Account::TYPE)
+                            .with_resource_type(Account::ENTITY_TYPE)
                             .with_field("name")
                             .convert());
                     }

@@ -63,7 +63,7 @@ pub struct Amount {
 }
 
 impl Amount {
-    pub const TYPE: &str = "whiterabbit::domain::Amount";
+    pub const ENTITY_TYPE: &str = "whiterabbit::domain::Amount";
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]

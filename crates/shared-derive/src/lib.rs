@@ -90,6 +90,8 @@ fn expand_domain_model(input: DeriveInput) -> syn::Result<proc_macro2::TokenStre
         impl ::shared::Entity for #name {
             type Id = #id_ty;
 
+            const ENTITY_TYPE: &'static str = concat!("whiterabbit::domain::", stringify!(#name));
+
             fn id(&self) -> &Self::Id {
                 &self.id
             }

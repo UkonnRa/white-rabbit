@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use shared::Entity;
+
 use crate::account::{Account, AccountId};
 use crate::error::{ErrorKind, Result};
 use crate::journal::Journal;
@@ -25,7 +27,7 @@ impl AccountContext {
         while let Some(parent_id) = &current.parent_id {
             let parent = self.accounts.get(parent_id).ok_or_else(|| {
                 shared::ErrorKind::not_found()
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("parent_id")
                     .with_detail(format!("parent {} not found", parent_id.as_ref()))
                     .convert()
@@ -33,7 +35,7 @@ impl AccountContext {
 
             if current.r#type != parent.r#type {
                 return Err(ErrorKind::mismatch(parent.r#type, current.r#type)
-                    .with_resource_type(Account::TYPE)
+                    .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("type")
                     .with_detail(format!("must match parent {} type", parent_id.as_ref(),)));
             }
@@ -49,7 +51,7 @@ impl AccountContext {
             && parent.is_archived()
         {
             return Err(shared::ErrorKind::conflict()
-                .with_resource_type(Account::TYPE)
+                .with_resource_type(Account::ENTITY_TYPE)
                 .with_field("parent_id")
                 .with_detail(format!(
                     "parent {} is archived; cannot create child under archived account",
@@ -67,7 +69,7 @@ impl AccountContext {
             && Account::is_reserved_name(&self.entity.name.to_string())
         {
             return Err(shared::ErrorKind::conflict()
-                .with_resource_type(Account::TYPE)
+                .with_resource_type(Account::ENTITY_TYPE)
                 .with_field("name")
                 .with_detail(format!(
                     "'{}' is a reserved root account name",

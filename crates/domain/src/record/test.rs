@@ -4,7 +4,7 @@ use crate::{
     journal::JournalId,
 };
 use chrono::NaiveDate;
-use shared::EntityId;
+use shared::{Entity, EntityId};
 
 use super::{Amount, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind};
 
@@ -316,7 +316,7 @@ fn test_error_empty_items_returns_non_empty_with_context() {
     .try_into();
     let err = result.unwrap_err();
     assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NonEmpty));
-    assert_eq!(err.context.resource_type, Some(Record::TYPE));
+    assert_eq!(err.context.resource_type, Some(Record::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("items"));
 }
 
@@ -338,7 +338,7 @@ fn test_error_negative_amount_returns_non_negative_with_context() {
         err.error,
         ErrorKind::Shared(shared::ErrorKind::NonNegative { .. })
     ));
-    assert_eq!(err.context.resource_type, Some(Amount::TYPE));
+    assert_eq!(err.context.resource_type, Some(Amount::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("amount"));
     match &err.error {
         ErrorKind::Shared(shared::ErrorKind::NonNegative { actual }) => {
@@ -394,7 +394,7 @@ fn test_error_mixed_item_kinds_returns_conflicting_values() {
         err.error,
         ErrorKind::Shared(shared::ErrorKind::ConflictingValues { .. })
     ));
-    assert_eq!(err.context.resource_type, Some(Record::TYPE));
+    assert_eq!(err.context.resource_type, Some(Record::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("items"));
     match &err.error {
         ErrorKind::Shared(shared::ErrorKind::ConflictingValues { values }) => {
@@ -408,14 +408,14 @@ fn test_error_mixed_item_kinds_returns_conflicting_values() {
 #[test]
 fn test_error_display_delegates_to_inner_error() {
     let err = shared::ErrorKind::non_negative("-5")
-        .with_resource_type(Record::TYPE)
+        .with_resource_type(Record::ENTITY_TYPE)
         .with_field("amount");
     // Display delegates to the inner error only; context is accessed programmatically
     let display = err.to_string();
     assert!(display.contains("non-negative"));
     assert!(display.contains("-5"));
     // Context is separate, not in Display
-    assert_eq!(err.context.resource_type, Some(Record::TYPE));
+    assert_eq!(err.context.resource_type, Some(Record::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("amount"));
 }
 

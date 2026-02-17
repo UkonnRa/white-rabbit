@@ -8,10 +8,20 @@ use crate::record::{
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
-use shared::NonEmpty;
+use shared::{Entity, NonEmpty};
 use std::collections::HashSet;
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct CostInput(String);
+
+impl<S> From<S> for CostInput
+where
+    S: Into<String>,
+{
+    fn from(value: S) -> Self {
+        Self(value.into())
+    }
+}
 
 impl TryFrom<CostInput> for Cost {
     type Error = Error;
@@ -55,14 +65,14 @@ impl TryFrom<AmountInput> for Amount {
             .parse::<Decimal>()
             .map_err(|_| shared::ErrorKind::invalid_format(amount).convert())?;
         let unit = unit.parse::<NonEmpty<String>>().map_err(|e| {
-            e.with_resource_type(Amount::TYPE)
+            e.with_resource_type(Amount::ENTITY_TYPE)
                 .with_field("unit")
                 .convert()
         })?;
 
         Ok(Amount {
             amount: amount.try_into().map_err(|e: shared::Error| {
-                e.with_resource_type(Amount::TYPE)
+                e.with_resource_type(Amount::ENTITY_TYPE)
                     .with_field("amount")
                     .convert()
             })?,
@@ -100,7 +110,7 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
     fn try_from(value: Vec<RecordItemInput>) -> Result<Self> {
         match value.first().map(|item| item.kind) {
             None => Err(shared::ErrorKind::non_empty()
-                .with_resource_type(Record::TYPE)
+                .with_resource_type(Record::ENTITY_TYPE)
                 .with_field("items")
                 .convert()),
             Some(RecordItemKind::Transaction)
@@ -127,7 +137,7 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     .collect::<Result<Vec<_>>>()?;
                 Ok(RecordItems::Transactions(
                     NonEmpty::try_from(transactions).map_err(|e| {
-                        e.with_resource_type(Record::TYPE)
+                        e.with_resource_type(Record::ENTITY_TYPE)
                             .with_field("items")
                             .convert()
                     })?,
@@ -150,7 +160,7 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                     .collect::<Result<Vec<_>>>()?;
                 Ok(RecordItems::Validations(
                     NonEmpty::try_from(validations).map_err(|e| {
-                        e.with_resource_type(Record::TYPE)
+                        e.with_resource_type(Record::ENTITY_TYPE)
                             .with_field("items")
                             .convert()
                     })?,
@@ -160,7 +170,7 @@ impl TryFrom<Vec<RecordItemInput>> for RecordItems {
                 RecordItemKind::Transaction.to_string(),
                 RecordItemKind::Validation.to_string(),
             ])
-            .with_resource_type(Record::TYPE)
+            .with_resource_type(Record::ENTITY_TYPE)
             .with_field("items")
             .convert()),
         }

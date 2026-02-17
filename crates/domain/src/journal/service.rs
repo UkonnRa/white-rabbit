@@ -5,7 +5,7 @@ use crate::journal::repository::JournalRepository;
 use crate::journal::specification::JournalSpecification;
 use crate::journal::{JournalId, JournalInput};
 use crate::{error::Result, journal::Journal};
-use shared::{ErrorKind, RepositorySession, WriteService};
+use shared::{Entity, ErrorKind, RepositorySession, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -169,7 +169,7 @@ impl<R: JournalRepository> JournalService<R> {
         for cmd in &commands {
             if !seen_names.insert(&cmd.name) {
                 return Err(ErrorKind::duplicate_values(&cmd.name)
-                    .with_resource_type(Journal::TYPE)
+                    .with_resource_type(Journal::ENTITY_TYPE)
                     .with_field("name")
                     .convert());
             }
@@ -178,7 +178,7 @@ impl<R: JournalRepository> JournalService<R> {
         let spec = JournalSpecification::names(seen_names.iter().copied());
         if let Some(existing) = repo.find_one(sess, &spec).await.map_err(|e| e.convert())? {
             return Err(ErrorKind::duplicate_values(&existing.name)
-                .with_resource_type(Journal::TYPE)
+                .with_resource_type(Journal::ENTITY_TYPE)
                 .with_field("name")
                 .convert());
         }
@@ -211,7 +211,7 @@ impl<R: JournalRepository> JournalService<R> {
         let batch_ids: HashSet<_> = commands.iter().map(|cmd| &cmd.id).collect();
         if batch_ids.len() != commands.len() {
             return Err(ErrorKind::duplicate_values("id")
-                .with_resource_type(Journal::TYPE)
+                .with_resource_type(Journal::ENTITY_TYPE)
                 .with_field("id")
                 .convert());
         }
@@ -225,7 +225,7 @@ impl<R: JournalRepository> JournalService<R> {
         for id in &id_vec {
             if !existing.contains_key(id) {
                 return Err(ErrorKind::not_found()
-                    .with_resource_type(Journal::TYPE)
+                    .with_resource_type(Journal::ENTITY_TYPE)
                     .with_field("id")
                     .with_detail(format!("journal {id} not found"))
                     .convert());
@@ -236,7 +236,7 @@ impl<R: JournalRepository> JournalService<R> {
         for cmd in &commands {
             if !new_names.insert(&cmd.name) {
                 return Err(ErrorKind::duplicate_values(&cmd.name)
-                    .with_resource_type(Journal::TYPE)
+                    .with_resource_type(Journal::ENTITY_TYPE)
                     .with_field("name")
                     .convert());
             }
@@ -251,7 +251,7 @@ impl<R: JournalRepository> JournalService<R> {
         for (conflict_id, conflict) in &conflicts {
             if !batch_ids.contains(conflict_id) {
                 return Err(ErrorKind::duplicate_values(&conflict.name)
-                    .with_resource_type(Journal::TYPE)
+                    .with_resource_type(Journal::ENTITY_TYPE)
                     .with_field("name")
                     .convert());
             }

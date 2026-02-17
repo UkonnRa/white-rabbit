@@ -1,0 +1,534 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use database_seaorm::repository::SeaOrmSession;
+use sea_orm::Database;
+
+use database_seaorm_migration::{Migrator, MigratorTrait};
+use domain::account::command::AccountCommandCreate;
+use domain::account::service::AccountService;
+use domain::account::{AccountId, AccountType};
+use domain::journal::JournalId;
+use domain::record::command::{
+    RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
+};
+use domain::record::service::RecordService;
+use domain::record::{RecordId, RecordItemKind};
+
+use crate::account::SeaOrmAccountRepository;
+use crate::record::SeaOrmRecordRepository;
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+type TestRecordService = RecordService<SeaOrmRecordRepository, SeaOrmAccountRepository>;
+
+async fn new_service() -> (TestRecordService, SeaOrmSession) {
+    let db = Database::connect("sqlite::memory:").await.unwrap();
+    Migrator::up(&db, None).await.unwrap();
+    let service = RecordService {
+        repository: Arc::new(SeaOrmRecordRepository),
+        account_repository: Arc::new(SeaOrmAccountRepository),
+    };
+    let sess = SeaOrmSession::new(db);
+    (service, sess)
+}
+
+/// Insert a journal row for FK constraints.
+async fn insert_journal(sess: &mut SeaOrmSession, id: &str) {
+    use crate::journal::entity;
+    use sea_orm::{EntityTrait, Set};
+    let model = entity::ActiveModel {
+        id: Set(id.to_string()),
+        version: Set(0),
+        created_at: Set(None),
+        last_modified_at: Set(None),
+        archived_at: Set(None),
+        name: Set(format!("Journal {id}")),
+        description: Set(String::new()),
+    };
+    sess.exec_insert(entity::Entity::insert(model))
+        .await
+        .unwrap();
+}
+
+/// Insert a root account directly via the repo.
+async fn insert_root(
+    sess: &mut SeaOrmSession,
+    journal_id: &JournalId,
+    account_type: AccountType,
+) -> AccountId {
+    use domain::account::{Account, AccountInput};
+    let repo = SeaOrmAccountRepository;
+    let id = AccountId::default();
+    let account: Account = AccountInput {
+        id: id.clone(),
+        journal_id: journal_id.clone(),
+        r#type: account_type,
+        name: account_type.to_string(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap();
+
+    use shared::WriteRepository;
+    repo.save_all(sess, &[account]).await.unwrap();
+    id
+}
+
+/// Set up a journal with root accounts and child accounts for testing.
+async fn setup_accounts(sess: &mut SeaOrmSession) -> (JournalId, AccountId, AccountId, AccountId) {
+    let jid = JournalId::from("j1");
+    insert_journal(sess, "j1").await;
+    let asset_root = insert_root(sess, &jid, AccountType::Asset).await;
+    let expense_root = insert_root(sess, &jid, AccountType::Expense).await;
+    let equity_root = insert_root(sess, &jid, AccountType::Equity).await;
+
+    let account_service = AccountService {
+        repository: Arc::new(SeaOrmAccountRepository),
+    };
+
+    let accounts = account_service
+        .create(
+            sess,
+            [
+                AccountCommandCreate {
+                    journal_id: jid.clone(),
+                    parent_id: asset_root,
+                    name: "Cash".to_string(),
+                    description: String::new(),
+                    tags: HashSet::new(),
+                },
+                AccountCommandCreate {
+                    journal_id: jid.clone(),
+                    parent_id: expense_root,
+                    name: "Food".to_string(),
+                    description: String::new(),
+                    tags: HashSet::new(),
+                },
+                AccountCommandCreate {
+                    journal_id: jid.clone(),
+                    parent_id: equity_root,
+                    name: "Opening".to_string(),
+                    description: String::new(),
+                    tags: HashSet::new(),
+                },
+            ],
+        )
+        .await
+        .unwrap();
+
+    let asset_id = accounts
+        .iter()
+        .find(|a| a.name.to_string() == "Cash")
+        .unwrap()
+        .id
+        .clone();
+    let expense_id = accounts
+        .iter()
+        .find(|a| a.name.to_string() == "Food")
+        .unwrap()
+        .id
+        .clone();
+    let equity_id = accounts
+        .iter()
+        .find(|a| a.name.to_string() == "Opening")
+        .unwrap()
+        .id
+        .clone();
+
+    (jid, asset_id, expense_id, equity_id)
+}
+
+fn transaction_item(account_id: &AccountId, amount: &str) -> RecordCommandItem {
+    RecordCommandItem {
+        account_id: account_id.clone(),
+        amount: amount.to_string(),
+        description: String::new(),
+        price: None,
+        cost: HashSet::new(),
+    }
+}
+
+fn create_cmd(journal_id: &JournalId, items: Vec<RecordCommandItem>) -> RecordCommandCreate {
+    RecordCommandCreate {
+        journal_id: journal_id.clone(),
+        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+        kind: RecordItemKind::Transaction,
+        items,
+        description: "Test record".to_string(),
+        tags: HashSet::new(),
+        payee: String::new(),
+    }
+}
+
+// ── Create tests ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_create_single_transaction_record() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let records = service
+        .create(
+            &mut sess,
+            [RecordCommandCreate {
+                journal_id: jid.clone(),
+                date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                kind: RecordItemKind::Transaction,
+                items: vec![
+                    transaction_item(&asset_id, "100 USD"),
+                    transaction_item(&expense_id, "100 USD"),
+                ],
+                description: "Lunch".to_string(),
+                tags: HashSet::from(["food".to_string()]),
+                payee: "Restaurant".to_string(),
+            }],
+        )
+        .await?;
+
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].description, "Lunch");
+    assert_eq!(records[0].payee, "Restaurant");
+    assert_eq!(records[0].journal_id, jid);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_create_validation_record() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, _, _) = setup_accounts(&mut sess).await;
+
+    let records = service
+        .create(
+            &mut sess,
+            [RecordCommandCreate {
+                journal_id: jid.clone(),
+                date: chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(),
+                kind: RecordItemKind::Validation,
+                items: vec![RecordCommandItem {
+                    account_id: asset_id.clone(),
+                    amount: "500 USD".to_string(),
+                    description: "Balance check".to_string(),
+                    price: None,
+                    cost: HashSet::new(),
+                }],
+                description: "Month-end validation".to_string(),
+                tags: HashSet::new(),
+                payee: String::new(),
+            }],
+        )
+        .await?;
+
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].is_balanced(), None);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_create_nonexistent_account_fails() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, _, _) = setup_accounts(&mut sess).await;
+
+    let err = service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "100 USD"),
+                    transaction_item(&AccountId::from("nonexistent"), "100 USD"),
+                ],
+            )],
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        err.error,
+        domain::error::ErrorKind::Shared(shared::ErrorKind::NotFound)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_create_empty_items_fails() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, _, _, _) = setup_accounts(&mut sess).await;
+
+    let err = service
+        .create(&mut sess, [create_cmd(&jid, vec![])])
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        err.error,
+        domain::error::ErrorKind::Shared(shared::ErrorKind::NonEmpty)
+    );
+
+    Ok(())
+}
+
+// ── Update tests ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_update_description_and_date() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let created = service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "50 USD"),
+                    transaction_item(&expense_id, "50 USD"),
+                ],
+            )],
+        )
+        .await?;
+    let id = created[0].id.clone();
+
+    let new_date = chrono::NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
+    let updated = service
+        .update(
+            &mut sess,
+            [RecordCommandUpdate {
+                id: id.clone(),
+                date: Some(new_date),
+                items: None,
+                description: Some("Updated description".to_string()),
+                tags: Some(HashSet::from(["updated".to_string()])),
+                payee: Some("New Payee".to_string()),
+            }],
+        )
+        .await?;
+
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].date, new_date);
+    assert_eq!(updated[0].description, "Updated description");
+    assert_eq!(updated[0].payee, "New Payee");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_update_replace_items() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
+
+    let created = service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "50 USD"),
+                    transaction_item(&expense_id, "50 USD"),
+                ],
+            )],
+        )
+        .await?;
+    let id = created[0].id.clone();
+
+    let updated = service
+        .update(
+            &mut sess,
+            [RecordCommandUpdate {
+                id,
+                date: None,
+                items: Some(vec![
+                    transaction_item(&asset_id, "200 USD"),
+                    transaction_item(&equity_id, "200 USD"),
+                ]),
+                description: None,
+                tags: None,
+                payee: None,
+            }],
+        )
+        .await?;
+
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].is_balanced(), Some(true));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_update_nonexistent_record_fails() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+
+    let err = service
+        .update(
+            &mut sess,
+            [RecordCommandUpdate {
+                id: RecordId::from("nonexistent"),
+                date: None,
+                items: None,
+                description: Some("Whatever".to_string()),
+                tags: None,
+                payee: None,
+            }],
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        err.error,
+        domain::error::ErrorKind::Shared(shared::ErrorKind::NotFound)
+    );
+
+    Ok(())
+}
+
+// ── Delete tests ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_delete_existing_record() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let created = service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "100 USD"),
+                    transaction_item(&expense_id, "100 USD"),
+                ],
+            )],
+        )
+        .await?;
+    let id = created[0].id.clone();
+
+    service.delete(&mut sess, [id]).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delete_nonexistent_is_silent() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    service
+        .delete(&mut sess, [RecordId::from("nonexistent")])
+        .await?;
+    Ok(())
+}
+
+// ── Batch tests ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
+
+    let created = service
+        .create(
+            &mut sess,
+            [
+                create_cmd(
+                    &jid,
+                    vec![
+                        transaction_item(&asset_id, "10 USD"),
+                        transaction_item(&expense_id, "10 USD"),
+                    ],
+                ),
+                create_cmd(
+                    &jid,
+                    vec![
+                        transaction_item(&asset_id, "20 USD"),
+                        transaction_item(&expense_id, "20 USD"),
+                    ],
+                ),
+            ],
+        )
+        .await?;
+
+    let to_delete_id = created[0].id.clone();
+    let to_update_id = created[1].id.clone();
+
+    let result = service
+        .batch(
+            &mut sess,
+            RecordCommandBatch {
+                delete: HashSet::from([to_delete_id]),
+                create: vec![create_cmd(
+                    &jid,
+                    vec![
+                        transaction_item(&asset_id, "300 USD"),
+                        transaction_item(&equity_id, "300 USD"),
+                    ],
+                )],
+                update: vec![RecordCommandUpdate {
+                    id: to_update_id.clone(),
+                    date: None,
+                    items: None,
+                    description: Some("Batch updated".to_string()),
+                    tags: None,
+                    payee: None,
+                }],
+            },
+        )
+        .await?;
+
+    assert_eq!(result.len(), 2);
+    let updated_record = result.iter().find(|r| r.id == to_update_id).unwrap();
+    assert_eq!(updated_record.description, "Batch updated");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
+
+    let created = service
+        .create(
+            &mut sess,
+            [create_cmd(
+                &jid,
+                vec![
+                    transaction_item(&asset_id, "50 USD"),
+                    transaction_item(&expense_id, "50 USD"),
+                ],
+            )],
+        )
+        .await?;
+    let id = created[0].id.clone();
+
+    let result = service
+        .batch(
+            &mut sess,
+            RecordCommandBatch {
+                delete: HashSet::from([id.clone()]),
+                create: vec![create_cmd(&jid, vec![])],
+                update: vec![],
+            },
+        )
+        .await;
+
+    assert!(result.is_err());
+
+    // The deleted record should still exist (rollback worked)
+    let found = service
+        .update(
+            &mut sess,
+            [RecordCommandUpdate {
+                id,
+                date: None,
+                items: None,
+                description: Some("Still here".to_string()),
+                tags: None,
+                payee: None,
+            }],
+        )
+        .await;
+    assert!(found.is_ok(), "Record should still exist after rollback");
+
+    Ok(())
+}

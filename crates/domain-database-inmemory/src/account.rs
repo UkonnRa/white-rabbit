@@ -130,7 +130,7 @@ impl InMemoryReadRepository<AccountSpec> for InMemoryAccountRepository {
 #[async_trait::async_trait]
 impl ReadRepository<AccountSpec> for InMemoryAccountRepository {
     type Entity = Account;
-    type Session = InMemorySession<AccountPo>;
+    type Session = InMemorySession;
 
     async fn find_all_by_ids(
         &self,

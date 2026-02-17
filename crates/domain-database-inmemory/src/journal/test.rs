@@ -6,18 +6,15 @@ use domain::journal::JournalId;
 use domain::journal::command::{JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate};
 use domain::journal::service::JournalService;
 
-use super::{InMemoryJournalRepository, JournalPo};
+use super::InMemoryJournalRepository;
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-fn new_service() -> (
-    JournalService<InMemoryJournalRepository>,
-    InMemorySession<JournalPo>,
-) {
+fn new_service() -> (JournalService<InMemoryJournalRepository>, InMemorySession) {
     let service = JournalService {
         repository: Arc::new(InMemoryJournalRepository),
     };
-    let sess = InMemorySession::<JournalPo>::default();
+    let sess = InMemorySession::default();
     (service, sess)
 }
 

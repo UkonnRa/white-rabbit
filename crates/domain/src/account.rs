@@ -41,8 +41,6 @@ pub struct Account {
 }
 
 impl Account {
-    pub const TYPE: &str = "whiterabbit::domain::Account";
-
     /// The 5 reserved root account names (one per `AccountType`).
     pub const RESERVED_ROOT_NAMES: [&str; 5] =
         ["Asset", "Liability", "Equity", "Income", "Expense"];

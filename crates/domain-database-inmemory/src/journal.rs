@@ -108,7 +108,7 @@ impl InMemoryReadRepository<JournalSpec> for InMemoryJournalRepository {
 #[async_trait::async_trait]
 impl ReadRepository<JournalSpec> for InMemoryJournalRepository {
     type Entity = Journal;
-    type Session = InMemorySession<JournalPo>;
+    type Session = InMemorySession;
 
     async fn find_all_by_ids(
         &self,

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
-use shared::NonEmpty;
+use shared::{Entity, NonEmpty};
 
 use crate::error::{Error, Result};
 use crate::journal::{Journal, JournalId};
@@ -30,7 +30,7 @@ impl TryFrom<JournalInput> for Journal {
             archived_at: value.archived_at,
 
             name: NonEmpty::try_from(value.name).map_err(|e| {
-                e.with_resource_type(Journal::TYPE)
+                e.with_resource_type(Journal::ENTITY_TYPE)
                     .with_field("name")
                     .convert()
             })?,

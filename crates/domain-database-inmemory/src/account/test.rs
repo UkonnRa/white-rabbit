@@ -7,28 +7,25 @@ use domain::account::command::{
     AccountCommandArchive, AccountCommandBatch, AccountCommandCreate, AccountCommandUpdate,
 };
 use domain::account::service::AccountService;
-use domain::account::{AccountId, AccountType};
+use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;
-use shared::EntityId;
+use shared::{Entity, EntityId};
 
 use super::{AccountPo, InMemoryAccountRepository};
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-fn new_service() -> (
-    AccountService<InMemoryAccountRepository>,
-    InMemorySession<AccountPo>,
-) {
+fn new_service() -> (AccountService<InMemoryAccountRepository>, InMemorySession) {
     let service = AccountService {
         repository: Arc::new(InMemoryAccountRepository),
     };
-    let sess = InMemorySession::<AccountPo>::default();
+    let sess = InMemorySession::default();
     (service, sess)
 }
 
 /// Create a root account directly in the session (roots are system-created, not via service).
 fn insert_root(
-    sess: &mut InMemorySession<AccountPo>,
+    sess: &mut InMemorySession,
     journal_id: &JournalId,
     account_type: AccountType,
 ) -> AccountId {
@@ -46,7 +43,8 @@ fn insert_root(
         description: String::new(),
         tags: HashSet::new(),
     };
-    sess.storage.insert(id.value().to_string(), po);
+    sess.get_storage_mut(Account::ENTITY_TYPE)
+        .insert(id.value().to_string(), serde_json::to_value(&po).unwrap());
     id
 }
 

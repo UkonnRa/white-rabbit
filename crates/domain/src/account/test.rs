@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::error::ErrorKind;
 use crate::journal::{JournalId, JournalInput};
-use shared::EntityId;
+use shared::{Entity, EntityId};
 
 use super::{Account, AccountContext, AccountId, AccountInput, AccountType};
 
@@ -73,7 +73,7 @@ fn test_error_empty_name_returns_non_empty_with_context() {
 
     let err = result.unwrap_err();
     assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NonEmpty));
-    assert_eq!(err.context.resource_type, Some(Account::TYPE));
+    assert_eq!(err.context.resource_type, Some(Account::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("name"));
 }
 
@@ -185,7 +185,7 @@ fn test_context_mismatch_immediate_parent() {
 
     let err = ctx.validate().unwrap_err();
     assert!(matches!(err.error, ErrorKind::Mismatch { .. }));
-    assert_eq!(err.context.resource_type, Some(Account::TYPE));
+    assert_eq!(err.context.resource_type, Some(Account::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("type"));
     match &err.error {
         ErrorKind::Mismatch { expected, actual } => {
@@ -266,6 +266,6 @@ fn test_context_parent_not_found() {
 
     let err = ctx.validate().unwrap_err();
     assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NotFound));
-    assert_eq!(err.context.resource_type, Some(Account::TYPE));
+    assert_eq!(err.context.resource_type, Some(Account::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("parent_id"));
 }

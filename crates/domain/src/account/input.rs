@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use shared::NonEmpty;
+use shared::{Entity, NonEmpty};
 use std::collections::HashSet;
 
 use crate::account::{Account, AccountId, AccountType};
@@ -34,7 +34,7 @@ impl TryFrom<AccountInput> for Account {
             archived_at: value.archived_at,
 
             name: NonEmpty::try_from(value.name).map_err(|e| {
-                e.with_resource_type(Account::TYPE)
+                e.with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
                     .convert()
             })?,

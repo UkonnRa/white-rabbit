@@ -29,7 +29,3 @@ pub struct Journal {
     pub description: String,
     pub tags: HashSet<NonEmpty<String>>,
 }
-
-impl Journal {
-    pub const TYPE: &str = "whiterabbit::domain::Journal";
-}
