@@ -10,9 +10,14 @@ args = ["fmt"]
 command = "cargo"
 args = ["clippy", "--fix", "--allow-dirty", "--allow-staged"]
 
+[tasks.lint-fix-md]
+install_crate = { crate_name = "rumdl", binary = "rumdl", test_arg = "--version" }
+command = "rumdl"
+args = ["check", "--fix", "docs/", "AGENTS.md"]
+
 [tasks.lint-fix]
 run_task = [
-    { name = ["lint-fix-rustfmt", "lint-fix-clippy"] },
+    { name = ["lint-fix-rustfmt", "lint-fix-clippy", "lint-fix-md"] },
 ]
 
 [tasks.upgrade-1]

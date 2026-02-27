@@ -17,3 +17,6 @@ This directory stores Architecture Decision Records (ADRs).
 
 ## Current ADRs
 - `0001-ddd-dry-run-cqrs-specification.md`
+- `0002-event-sourcing-dual-write-persistence.md`
+- `0003-in-memory-event-bus-routing.md`
+- `0004-transaction-boundaries-long-running-processes.md`
