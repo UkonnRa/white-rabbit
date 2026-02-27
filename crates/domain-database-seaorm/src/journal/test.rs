@@ -7,6 +7,7 @@ use sea_orm::Database;
 use database_seaorm_migration::{Migrator, MigratorTrait};
 use domain::journal::JournalId;
 use domain::journal::command::{JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate};
+use domain::journal::event::*;
 use domain::journal::service::JournalService;
 
 use super::SeaOrmJournalRepository;
@@ -31,13 +32,33 @@ fn create_cmd(name: &str) -> JournalCommandCreate {
     }
 }
 
+fn created_id(events: &[JournalEvent]) -> JournalId {
+    events
+        .iter()
+        .find_map(|e| match e {
+            JournalEvent::Created(c) => Some(c.id.clone()),
+            _ => None,
+        })
+        .expect("no Created event found")
+}
+
+fn created_id_by_name(events: &[JournalEvent], name: &str) -> JournalId {
+    events
+        .iter()
+        .find_map(|e| match e {
+            JournalEvent::Created(c) if c.name == name => Some(c.id.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no Created event with name '{name}'"))
+}
+
 // ── Create tests ─────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_create_single_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
-    let journals = service
+    let events = service
         .create(
             &mut sess,
             [JournalCommandCreate {
@@ -48,9 +69,12 @@ async fn test_create_single_journal() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(journals.len(), 1);
-    assert_eq!(journals[0].name.to_string(), "My Ledger");
-    assert_eq!(journals[0].description, "Personal finance");
+    assert_eq!(events.len(), 1);
+    let JournalEvent::Created(e) = &events[0] else {
+        panic!("expected Created")
+    };
+    assert_eq!(e.name, "My Ledger");
+    assert_eq!(e.description, "Personal finance");
 
     Ok(())
 }
@@ -59,15 +83,21 @@ async fn test_create_single_journal() -> anyhow::Result<()> {
 async fn test_create_batch_multiple_journals() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
-    let journals = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
         )
         .await?;
 
-    assert_eq!(journals.len(), 3);
-    let names: HashSet<_> = journals.iter().map(|j| j.name.to_string()).collect();
+    assert_eq!(events.len(), 3);
+    let names: HashSet<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            JournalEvent::Created(c) => Some(c.name.clone()),
+            _ => None,
+        })
+        .collect();
     assert!(names.contains("Alpha"));
     assert!(names.contains("Beta"));
     assert!(names.contains("Gamma"));
@@ -78,10 +108,10 @@ async fn test_create_batch_multiple_journals() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_create_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
-    let journals = service
+    let events = service
         .create(&mut sess, Vec::<JournalCommandCreate>::new())
         .await?;
-    assert!(journals.is_empty());
+    assert!(events.is_empty());
     Ok(())
 }
 
@@ -148,9 +178,9 @@ async fn test_update_single_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
     let created = service.create(&mut sess, [create_cmd("Original")]).await?;
-    let id = created[0].id.clone();
+    let id = created_id(&created);
 
-    let updated = service
+    let events = service
         .update(
             &mut sess,
             [JournalCommandUpdate {
@@ -162,9 +192,12 @@ async fn test_update_single_journal() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(updated.len(), 1);
-    assert_eq!(updated[0].name.to_string(), "Renamed");
-    assert_eq!(updated[0].description, "New desc");
+    assert_eq!(events.len(), 1);
+    let JournalEvent::Updated(e) = &events[0] else {
+        panic!("expected Updated")
+    };
+    assert_eq!(e.name.as_deref(), Some("Renamed"));
+    assert_eq!(e.description.as_deref(), Some("New desc"));
 
     Ok(())
 }
@@ -201,21 +234,10 @@ async fn test_update_name_swap_is_allowed() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd("Alpha"), create_cmd("Beta")])
         .await?;
+    let alpha_id = created_id_by_name(&created, "Alpha");
+    let beta_id = created_id_by_name(&created, "Beta");
 
-    let alpha_id = created
-        .iter()
-        .find(|j| j.name.to_string() == "Alpha")
-        .unwrap()
-        .id
-        .clone();
-    let beta_id = created
-        .iter()
-        .find(|j| j.name.to_string() == "Beta")
-        .unwrap()
-        .id
-        .clone();
-
-    let updated = service
+    let events = service
         .update(
             &mut sess,
             [
@@ -235,10 +257,22 @@ async fn test_update_name_swap_is_allowed() -> anyhow::Result<()> {
         )
         .await?;
 
-    let alpha_journal = updated.iter().find(|j| j.id == alpha_id).unwrap();
-    let beta_journal = updated.iter().find(|j| j.id == beta_id).unwrap();
-    assert_eq!(alpha_journal.name.to_string(), "Beta");
-    assert_eq!(beta_journal.name.to_string(), "Alpha");
+    let alpha_event = events
+        .iter()
+        .find_map(|e| match e {
+            JournalEvent::Updated(u) if u.id == alpha_id => Some(u),
+            _ => None,
+        })
+        .expect("no Updated event for alpha");
+    let beta_event = events
+        .iter()
+        .find_map(|e| match e {
+            JournalEvent::Updated(u) if u.id == beta_id => Some(u),
+            _ => None,
+        })
+        .expect("no Updated event for beta");
+    assert_eq!(alpha_event.name.as_deref(), Some("Beta"));
+    assert_eq!(beta_event.name.as_deref(), Some("Alpha"));
 
     Ok(())
 }
@@ -250,7 +284,7 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
     let created = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
-    let id = created[0].id.clone();
+    let id = created_id(&created);
 
     service.delete(&mut sess, [id]).await?;
 
@@ -275,21 +309,11 @@ async fn test_delete_nonexistent_id_is_silently_ignored() -> anyhow::Result<()> 
 async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
-    let created = service
+    let events = service
         .create(&mut sess, [create_cmd("ToDelete"), create_cmd("ToUpdate")])
         .await?;
-    let to_delete_id = created
-        .iter()
-        .find(|j| j.name.to_string() == "ToDelete")
-        .unwrap()
-        .id
-        .clone();
-    let to_update_id = created
-        .iter()
-        .find(|j| j.name.to_string() == "ToUpdate")
-        .unwrap()
-        .id
-        .clone();
+    let to_delete_id = created_id_by_name(&events, "ToDelete");
+    let to_update_id = created_id_by_name(&events, "ToUpdate");
 
     let result = service
         .batch(
@@ -307,10 +331,17 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(result.len(), 2);
-    let names: HashSet<_> = result.iter().map(|j| j.name.to_string()).collect();
-    assert!(names.contains("NewJournal"));
-    assert!(names.contains("Updated"));
+    assert_eq!(result.len(), 3);
+    assert!(
+        result
+            .iter()
+            .any(|e| matches!(e, JournalEvent::Created(c) if c.name == "NewJournal"))
+    );
+    assert!(
+        result
+            .iter()
+            .any(|e| matches!(e, JournalEvent::Updated(u) if u.name.as_deref() == Some("Updated")))
+    );
 
     Ok(())
 }
@@ -320,7 +351,7 @@ async fn test_batch_delete_frees_name_for_create() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
     let created = service.create(&mut sess, [create_cmd("Reusable")]).await?;
-    let id = created[0].id.clone();
+    let id = created_id(&created);
 
     let result = service
         .batch(
@@ -333,8 +364,12 @@ async fn test_batch_delete_frees_name_for_create() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].name.to_string(), "Reusable");
+    assert_eq!(result.len(), 2);
+    assert!(
+        result
+            .iter()
+            .any(|e| matches!(e, JournalEvent::Created(c) if c.name == "Reusable"))
+    );
 
     Ok(())
 }
@@ -346,7 +381,7 @@ async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd("WillSurvive")])
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&created);
 
     let result = service
         .batch(
@@ -417,15 +452,10 @@ async fn test_spec_find_by_id() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let repo = SeaOrmJournalRepository;
 
-    let created = service
+    let events = service
         .create(&mut sess, [create_cmd("Alpha"), create_cmd("Beta")])
         .await?;
-    let alpha_id = created
-        .iter()
-        .find(|j| j.name.to_string() == "Alpha")
-        .unwrap()
-        .id
-        .clone();
+    let alpha_id = created_id_by_name(&events, "Alpha");
 
     let found = repo
         .find_all(&sess, &JournalSpecification::id(alpha_id.clone()), None)
@@ -558,7 +588,7 @@ async fn test_spec_all_and() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let repo = SeaOrmJournalRepository;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [
@@ -576,12 +606,7 @@ async fn test_spec_all_and() -> anyhow::Result<()> {
             ],
         )
         .await?;
-    let alpha_id = created
-        .iter()
-        .find(|j| j.name.to_string() == "Alpha")
-        .unwrap()
-        .id
-        .clone();
+    let alpha_id = created_id_by_name(&events, "Alpha");
 
     let spec = JournalSpecification::tag("tag1") & JournalSpecification::id(alpha_id.clone());
     let found = repo.find_all(&sess, &spec, None).await?;

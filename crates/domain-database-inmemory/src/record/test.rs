@@ -3,14 +3,16 @@ use std::sync::Arc;
 
 use database_inmemory::repository::InMemorySession;
 use domain::account::command::AccountCommandCreate;
+use domain::account::event::*;
 use domain::account::service::AccountService;
 use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;
 use domain::record::command::{
     RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
 };
+use domain::record::event::*;
 use domain::record::service::RecordService;
-use domain::record::{RecordId, RecordItemKind};
+use domain::record::{RecordId, RecordItemKind, RecordItems};
 use shared::{Entity, EntityId};
 
 use crate::account::{AccountPo, InMemoryAccountRepository};
@@ -68,7 +70,7 @@ async fn setup_accounts(
         repository: Arc::new(InMemoryAccountRepository),
     };
 
-    let accounts = account_service
+    let events = account_service
         .create(
             sess,
             [
@@ -98,26 +100,31 @@ async fn setup_accounts(
         .await
         .unwrap();
 
-    let asset_id = accounts
-        .iter()
-        .find(|a| a.name.to_string() == "Cash")
-        .unwrap()
-        .id
-        .clone();
-    let expense_id = accounts
-        .iter()
-        .find(|a| a.name.to_string() == "Food")
-        .unwrap()
-        .id
-        .clone();
-    let equity_id = accounts
-        .iter()
-        .find(|a| a.name.to_string() == "Opening")
-        .unwrap()
-        .id
-        .clone();
+    fn find_created_id(events: &[AccountEvent], name: &str) -> AccountId {
+        events
+            .iter()
+            .find_map(|e| match e {
+                AccountEvent::Created(c) if c.name == name => Some(c.id.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no Created event with name '{name}'"))
+    }
+
+    let asset_id = find_created_id(&events, "Cash");
+    let expense_id = find_created_id(&events, "Food");
+    let equity_id = find_created_id(&events, "Opening");
 
     (jid, asset_id, expense_id, equity_id)
+}
+
+fn created_id(events: &[RecordEvent]) -> RecordId {
+    events
+        .iter()
+        .find_map(|e| match e {
+            RecordEvent::Created(c) => Some(c.id.clone()),
+            _ => None,
+        })
+        .expect("no Created event found")
 }
 
 fn transaction_item(account_id: &AccountId, amount: &str) -> RecordCommandItem {
@@ -149,7 +156,7 @@ async fn test_create_single_transaction_record() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let records = service
+    let events = service
         .create(
             &mut sess,
             [RecordCommandCreate {
@@ -167,10 +174,14 @@ async fn test_create_single_transaction_record() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].description, "Lunch");
-    assert_eq!(records[0].payee, "Restaurant");
-    assert_eq!(records[0].journal_id, jid);
+    assert_eq!(events.len(), 1);
+    let c = match &events[0] {
+        RecordEvent::Created(c) => c,
+        other => panic!("expected Created event, got {other:?}"),
+    };
+    assert_eq!(c.description, "Lunch");
+    assert_eq!(c.payee, "Restaurant");
+    assert_eq!(c.journal_id, jid);
 
     Ok(())
 }
@@ -180,7 +191,7 @@ async fn test_create_validation_record() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, _, _) = setup_accounts(&mut sess).await;
 
-    let records = service
+    let events = service
         .create(
             &mut sess,
             [RecordCommandCreate {
@@ -201,8 +212,12 @@ async fn test_create_validation_record() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].is_balanced(), None);
+    assert_eq!(events.len(), 1);
+    let c = match &events[0] {
+        RecordEvent::Created(c) => c,
+        other => panic!("expected Created event, got {other:?}"),
+    };
+    assert!(matches!(c.items, RecordItems::Validations(_)));
 
     Ok(())
 }
@@ -212,7 +227,7 @@ async fn test_create_with_price() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, _, equity_id) = setup_accounts(&mut sess).await;
 
-    let records = service
+    let events = service
         .create(
             &mut sess,
             [RecordCommandCreate {
@@ -236,8 +251,12 @@ async fn test_create_with_price() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].is_balanced(), Some(true));
+    assert_eq!(events.len(), 1);
+    let c = match &events[0] {
+        RecordEvent::Created(c) => c,
+        other => panic!("expected Created event, got {other:?}"),
+    };
+    assert!(matches!(c.items, RecordItems::Transactions(_)));
 
     Ok(())
 }
@@ -246,10 +265,10 @@ async fn test_create_with_price() -> anyhow::Result<()> {
 async fn test_create_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let records = service
+    let events = service
         .create(&mut sess, Vec::<RecordCommandCreate>::new())
         .await?;
-    assert!(records.is_empty());
+    assert!(events.is_empty());
 
     Ok(())
 }
@@ -400,7 +419,7 @@ async fn test_update_description_and_date() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd(
@@ -412,10 +431,10 @@ async fn test_update_description_and_date() -> anyhow::Result<()> {
             )],
         )
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&events);
 
     let new_date = chrono::NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
-    let updated = service
+    let events = service
         .update(
             &mut sess,
             [RecordCommandUpdate {
@@ -429,10 +448,14 @@ async fn test_update_description_and_date() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(updated.len(), 1);
-    assert_eq!(updated[0].date, new_date);
-    assert_eq!(updated[0].description, "Updated description");
-    assert_eq!(updated[0].payee, "New Payee");
+    assert_eq!(events.len(), 1);
+    let u = match &events[0] {
+        RecordEvent::Updated(u) => u,
+        other => panic!("expected Updated event, got {other:?}"),
+    };
+    assert_eq!(u.date, Some(new_date));
+    assert_eq!(u.description.as_deref(), Some("Updated description"));
+    assert_eq!(u.payee.as_deref(), Some("New Payee"));
 
     Ok(())
 }
@@ -442,7 +465,7 @@ async fn test_update_replace_items() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd(
@@ -454,9 +477,9 @@ async fn test_update_replace_items() -> anyhow::Result<()> {
             )],
         )
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&events);
 
-    let updated = service
+    let events = service
         .update(
             &mut sess,
             [RecordCommandUpdate {
@@ -473,8 +496,12 @@ async fn test_update_replace_items() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(updated.len(), 1);
-    assert_eq!(updated[0].is_balanced(), Some(true));
+    assert_eq!(events.len(), 1);
+    let u = match &events[0] {
+        RecordEvent::Updated(u) => u,
+        other => panic!("expected Updated event, got {other:?}"),
+    };
+    assert!(matches!(u.items, Some(RecordItems::Transactions(_))));
 
     Ok(())
 }
@@ -484,7 +511,7 @@ async fn test_update_keep_existing_items() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, _, equity_id) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd(
@@ -496,9 +523,9 @@ async fn test_update_keep_existing_items() -> anyhow::Result<()> {
             )],
         )
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&events);
 
-    let updated = service
+    let events = service
         .update(
             &mut sess,
             [RecordCommandUpdate {
@@ -512,8 +539,12 @@ async fn test_update_keep_existing_items() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(updated[0].description, "Only description changed");
-    assert_eq!(updated[0].is_balanced(), Some(true));
+    let u = match &events[0] {
+        RecordEvent::Updated(u) => u,
+        other => panic!("expected Updated event, got {other:?}"),
+    };
+    assert_eq!(u.description.as_deref(), Some("Only description changed"));
+    assert!(u.items.is_some());
 
     Ok(())
 }
@@ -550,7 +581,7 @@ async fn test_update_duplicate_ids_fails() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd(
@@ -562,7 +593,7 @@ async fn test_update_duplicate_ids_fails() -> anyhow::Result<()> {
             )],
         )
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&events);
 
     let err = service
         .update(
@@ -602,10 +633,10 @@ async fn test_update_duplicate_ids_fails() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_update_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    let updated = service
+    let events = service
         .update(&mut sess, Vec::<RecordCommandUpdate>::new())
         .await?;
-    assert!(updated.is_empty());
+    assert!(events.is_empty());
     Ok(())
 }
 
@@ -616,7 +647,7 @@ async fn test_delete_existing_record() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd(
@@ -628,7 +659,7 @@ async fn test_delete_existing_record() -> anyhow::Result<()> {
             )],
         )
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&events);
 
     service.delete(&mut sess, [id]).await?;
 
@@ -656,10 +687,10 @@ async fn test_delete_empty_batch_succeeds() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_batch_empty_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    let result = service
+    let events = service
         .batch(&mut sess, RecordCommandBatch::default())
         .await?;
-    assert!(result.is_empty());
+    assert!(events.is_empty());
     Ok(())
 }
 
@@ -668,7 +699,7 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [
@@ -690,10 +721,17 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
         )
         .await?;
 
-    let to_delete_id = created[0].id.clone();
-    let to_update_id = created[1].id.clone();
+    let ids: Vec<RecordId> = events
+        .iter()
+        .filter_map(|e| match e {
+            RecordEvent::Created(c) => Some(c.id.clone()),
+            _ => None,
+        })
+        .collect();
+    let to_delete_id = ids[0].clone();
+    let to_update_id = ids[1].clone();
 
-    let result = service
+    let events = service
         .batch(
             &mut sess,
             RecordCommandBatch {
@@ -717,9 +755,14 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(result.len(), 2);
-    let updated_record = result.iter().find(|r| r.id == to_update_id).unwrap();
-    assert_eq!(updated_record.description, "Batch updated");
+    let updated_event = events
+        .iter()
+        .find_map(|e| match e {
+            RecordEvent::Updated(u) if u.id == to_update_id => Some(u),
+            _ => None,
+        })
+        .expect("no Updated event for to_update_id");
+    assert_eq!(updated_event.description.as_deref(), Some("Batch updated"));
 
     Ok(())
 }
@@ -729,7 +772,7 @@ async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [create_cmd(
@@ -741,7 +784,7 @@ async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
             )],
         )
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&events);
 
     // Batch: delete existing + create with empty items (fails)
     let result = service
@@ -836,7 +879,7 @@ async fn test_spec_find_by_id() -> anyhow::Result<()> {
     let repo = InMemoryRecordRepository;
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let created = service
+    let events = service
         .create(
             &mut sess,
             [
@@ -857,7 +900,7 @@ async fn test_spec_find_by_id() -> anyhow::Result<()> {
             ],
         )
         .await?;
-    let id0 = created[0].id.clone();
+    let id0 = created_id(&events);
 
     let found = repo
         .find_all(&sess, &RecordSpecification::id(id0.clone()), None)

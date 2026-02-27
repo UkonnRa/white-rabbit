@@ -1,13 +1,13 @@
 use chrono::Utc;
 
+use crate::error::Result;
 use crate::journal::command::{
     JournalCommand, JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate,
 };
 use crate::journal::event::*;
 use crate::journal::repository::JournalRepository;
 use crate::journal::specification::JournalSpecification;
-use crate::journal::{JournalId, JournalInput};
-use crate::{error::Result, journal::Journal};
+use crate::journal::{Journal, JournalId, JournalInput};
 use shared::{Entity, ErrorKind, RepositorySession, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -26,8 +26,9 @@ impl<R: JournalRepository> JournalService<R> {
     ///
     /// # Returns
     ///
-    /// The persisted [`Journal`] list as returned by the repository (with
-    /// DB-assigned IDs; any client-provided IDs in the commands are ignored).
+    /// One [`JournalEvent::Created`] per successfully created journal
+    /// (with DB-assigned IDs; any client-provided IDs in the commands
+    /// are ignored).
     ///
     /// # Errors
     ///
@@ -39,7 +40,7 @@ impl<R: JournalRepository> JournalService<R> {
         &self,
         sess: &mut R::Session,
         commands: impl IntoIterator<Item = JournalCommandCreate>,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalEvent>> {
         Self::do_create(&self.repository, sess, commands.into_iter().collect()).await
     }
 
@@ -69,7 +70,7 @@ impl<R: JournalRepository> JournalService<R> {
     ///
     /// # Returns
     ///
-    /// The updated [`Journal`] list as returned by the repository.
+    /// One [`JournalEvent::Updated`] per successfully updated journal.
     ///
     /// # Errors
     ///
@@ -84,7 +85,7 @@ impl<R: JournalRepository> JournalService<R> {
         &self,
         sess: &mut R::Session,
         commands: impl IntoIterator<Item = JournalCommandUpdate>,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalEvent>> {
         Self::do_update(&self.repository, sess, commands.into_iter().collect()).await
     }
 
@@ -94,11 +95,16 @@ impl<R: JournalRepository> JournalService<R> {
     /// any existing journal are silently ignored — this is intentional to
     /// prevent ID-guessing attacks from inferring which IDs exist via error
     /// responses.
+    ///
+    /// # Returns
+    ///
+    /// One [`JournalEvent::Deleted`] per ID that was passed in (regardless
+    /// of whether the journal existed).
     pub async fn delete(
         &self,
         sess: &mut R::Session,
         ids: impl IntoIterator<Item = impl Into<JournalId>>,
-    ) -> Result<()> {
+    ) -> Result<Vec<JournalEvent>> {
         Self::do_delete(
             &self.repository,
             sess,
@@ -119,15 +125,12 @@ impl<R: JournalRepository> JournalService<R> {
     ///
     /// # Returns
     ///
-    /// The journals that remain in the database after the batch — i.e. created
-    /// and updated journals, deduplicated by ID (if a journal is created then
-    /// updated in the same batch, only the final state is returned).
-    /// Deleted journals are not included.
+    /// All events produced by the sub-operations, in execution order.
     pub async fn batch(
         &self,
         sess: &mut R::Session,
         command: JournalCommandBatch,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalEvent>> {
         sess.begin().await.map_err(|e| e.convert())?;
 
         let result = Self::do_batch(&self.repository, sess, command).await;
@@ -148,17 +151,12 @@ impl<R: JournalRepository> JournalService<R> {
         repo: &R,
         sess: &mut R::Session,
         command: JournalCommandBatch,
-    ) -> Result<Vec<Journal>> {
-        Self::do_delete(repo, sess, command.delete).await?;
-        let created = Self::do_create(repo, sess, command.create).await?;
-        let updated = Self::do_update(repo, sess, command.update).await?;
-
-        let mut result: HashMap<_, _> = created.into_iter().map(|j| (j.id.clone(), j)).collect();
-        for j in updated {
-            result.insert(j.id.clone(), j);
-        }
-
-        Ok(result.into_values().collect())
+    ) -> Result<Vec<JournalEvent>> {
+        let mut events = Vec::new();
+        events.extend(Self::do_delete(repo, sess, command.delete).await?);
+        events.extend(Self::do_create(repo, sess, command.create).await?);
+        events.extend(Self::do_update(repo, sess, command.update).await?);
+        Ok(events)
     }
 
     // ── Internal implementations ─────────────────────────────────
@@ -167,7 +165,13 @@ impl<R: JournalRepository> JournalService<R> {
         repo: &R,
         sess: &mut R::Session,
         commands: Vec<JournalCommandCreate>,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalEvent>> {
+        if commands.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let now = Utc::now();
+
         let mut seen_names = HashSet::new();
         for cmd in &commands {
             if !seen_names.insert(&cmd.name) {
@@ -203,14 +207,32 @@ impl<R: JournalRepository> JournalService<R> {
             .save_all(sess, &journals)
             .await
             .map_err(|e| e.convert())?;
-        Ok(saved.into_values().collect())
+
+        Ok(saved
+            .into_values()
+            .map(|j| {
+                JournalEvent::Created(JournalCreated {
+                    id: j.id,
+                    name: j.name.to_string(),
+                    description: j.description,
+                    tags: j.tags.iter().map(|t| t.to_string()).collect(),
+                    created_at: j.created_at.unwrap_or(now),
+                })
+            })
+            .collect())
     }
 
     async fn do_update(
         repo: &R,
         sess: &mut R::Session,
         commands: Vec<JournalCommandUpdate>,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalEvent>> {
+        if commands.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let now = Utc::now();
+
         let batch_ids: HashSet<_> = commands.iter().map(|cmd| &cmd.id).collect();
         if batch_ids.len() != commands.len() {
             return Err(ErrorKind::duplicate_values("id")
@@ -298,15 +320,37 @@ impl<R: JournalRepository> JournalService<R> {
             .save_all(sess, &journals)
             .await
             .map_err(|e| e.convert())?;
-        Ok(saved.into_values().collect())
+
+        Ok(saved
+            .into_values()
+            .map(|j| {
+                JournalEvent::Updated(JournalUpdated {
+                    id: j.id,
+                    name: Some(j.name.to_string()),
+                    description: Some(j.description),
+                    tags: Some(j.tags.iter().map(|t| t.to_string()).collect()),
+                    last_modified_at: j.last_modified_at.unwrap_or(now),
+                })
+            })
+            .collect())
     }
 
-    async fn do_delete(repo: &R, sess: &mut R::Session, ids: HashSet<JournalId>) -> Result<()> {
-        let ids: Vec<_> = ids.into_iter().collect();
-        repo.delete_all_by_ids(sess, &ids)
+    async fn do_delete(
+        repo: &R,
+        sess: &mut R::Session,
+        ids: HashSet<JournalId>,
+    ) -> Result<Vec<JournalEvent>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let ids_vec: Vec<_> = ids.into_iter().collect();
+        repo.delete_all_by_ids(sess, &ids_vec)
             .await
             .map_err(|e| e.convert())?;
-        Ok(())
+        Ok(ids_vec
+            .into_iter()
+            .map(|id| JournalEvent::Deleted(JournalDeleted { id }))
+            .collect())
     }
 }
 
@@ -321,86 +365,11 @@ impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
         sess: &mut Self::Session,
         command: JournalCommand,
     ) -> Result<Vec<JournalEvent>> {
-        let now = Utc::now();
         match command {
-            JournalCommand::Create(cmd) => {
-                let journals = self.create(sess, [cmd]).await?;
-                Ok(journals
-                    .into_iter()
-                    .map(|j| {
-                        JournalEvent::Created(JournalCreated {
-                            id: j.id,
-                            name: j.name.to_string(),
-                            description: j.description,
-                            tags: j.tags.iter().map(|t| t.to_string()).collect(),
-                            created_at: j.created_at.unwrap_or(now),
-                        })
-                    })
-                    .collect())
-            }
-            JournalCommand::Update(cmd) => {
-                let id = cmd.id.clone();
-                let name = if cmd.name.is_empty() {
-                    None
-                } else {
-                    Some(cmd.name.clone())
-                };
-                let description = cmd.description.clone();
-                let tags = cmd.tags.clone();
-                self.update(sess, [cmd]).await?;
-                Ok(vec![JournalEvent::Updated(JournalUpdated {
-                    id,
-                    name,
-                    description,
-                    tags,
-                    last_modified_at: now,
-                })])
-            }
-            JournalCommand::Delete(ids) => {
-                let events: Vec<_> = ids
-                    .iter()
-                    .map(|id| JournalEvent::Deleted(JournalDeleted { id: id.clone() }))
-                    .collect();
-                self.delete(sess, ids).await?;
-                Ok(events)
-            }
-            JournalCommand::Batch(cmd) => {
-                let delete_events: Vec<_> = cmd
-                    .delete
-                    .iter()
-                    .map(|id| JournalEvent::Deleted(JournalDeleted { id: id.clone() }))
-                    .collect();
-                let create_cmds = cmd.create.clone();
-                let update_cmds = cmd.update.clone();
-
-                self.batch(sess, cmd).await?;
-
-                let mut events = delete_events;
-                for create_cmd in create_cmds {
-                    events.push(JournalEvent::Created(JournalCreated {
-                        id: JournalId::default(),
-                        name: create_cmd.name,
-                        description: create_cmd.description,
-                        tags: create_cmd.tags,
-                        created_at: now,
-                    }));
-                }
-                for update_cmd in update_cmds {
-                    let name = if update_cmd.name.is_empty() {
-                        None
-                    } else {
-                        Some(update_cmd.name)
-                    };
-                    events.push(JournalEvent::Updated(JournalUpdated {
-                        id: update_cmd.id,
-                        name,
-                        description: update_cmd.description,
-                        tags: update_cmd.tags,
-                        last_modified_at: now,
-                    }));
-                }
-                Ok(events)
-            }
+            JournalCommand::Create(cmd) => self.create(sess, [cmd]).await,
+            JournalCommand::Update(cmd) => self.update(sess, [cmd]).await,
+            JournalCommand::Delete(ids) => self.delete(sess, ids).await,
+            JournalCommand::Batch(cmd) => self.batch(sess, cmd).await,
         }
     }
 }

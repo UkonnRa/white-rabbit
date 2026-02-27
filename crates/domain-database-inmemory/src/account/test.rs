@@ -6,6 +6,7 @@ use database_inmemory::repository::InMemorySession;
 use domain::account::command::{
     AccountCommandArchive, AccountCommandBatch, AccountCommandCreate, AccountCommandUpdate,
 };
+use domain::account::event::*;
 use domain::account::service::AccountService;
 use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;
@@ -58,6 +59,26 @@ fn create_cmd(journal_id: &JournalId, parent_id: &AccountId, name: &str) -> Acco
     }
 }
 
+fn created_id(events: &[AccountEvent]) -> AccountId {
+    events
+        .iter()
+        .find_map(|e| match e {
+            AccountEvent::Created(c) => Some(c.id.clone()),
+            _ => None,
+        })
+        .expect("no Created event found")
+}
+
+fn created_id_by_name(events: &[AccountEvent], name: &str) -> AccountId {
+    events
+        .iter()
+        .find_map(|e| match e {
+            AccountEvent::Created(c) if c.name == name => Some(c.id.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no Created event with name '{name}'"))
+}
+
 // ── Create tests ─────────────────────────────────────────────────
 
 #[tokio::test]
@@ -66,14 +87,17 @@ async fn test_create_single_account() -> anyhow::Result<()> {
     let jid = JournalId::from("j1");
     let root_id = insert_root(&mut sess, &jid, AccountType::Asset);
 
-    let accounts = service
+    let events = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Cash")])
         .await?;
 
-    assert_eq!(accounts.len(), 1);
-    assert_eq!(accounts[0].name.to_string(), "Cash");
-    assert_eq!(accounts[0].r#type, AccountType::Asset);
-    assert_eq!(accounts[0].parent_id.as_ref(), Some(&root_id));
+    assert_eq!(events.len(), 1);
+    let AccountEvent::Created(e) = &events[0] else {
+        panic!("expected Created")
+    };
+    assert_eq!(e.name, "Cash");
+    assert_eq!(e.r#type, AccountType::Asset);
+    assert_eq!(e.parent_id.as_ref(), Some(&root_id));
 
     Ok(())
 }
@@ -143,7 +167,6 @@ async fn test_create_under_archived_parent_fails() -> anyhow::Result<()> {
     let jid = JournalId::from("j1");
     let root_id = insert_root(&mut sess, &jid, AccountType::Asset);
 
-    // Archive the root
     service
         .archive(
             &mut sess,
@@ -198,11 +221,14 @@ async fn test_create_inherits_type_from_parent() -> anyhow::Result<()> {
     let jid = JournalId::from("j1");
     let root_id = insert_root(&mut sess, &jid, AccountType::Liability);
 
-    let accounts = service
+    let events = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Mortgage")])
         .await?;
 
-    assert_eq!(accounts[0].r#type, AccountType::Liability);
+    let AccountEvent::Created(e) = &events[0] else {
+        panic!("expected Created")
+    };
+    assert_eq!(e.r#type, AccountType::Liability);
 
     Ok(())
 }
@@ -218,12 +244,13 @@ async fn test_update_account_name() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "OldName")])
         .await?;
+    let id = created_id(&created);
 
     let updated = service
         .update(
             &mut sess,
             [AccountCommandUpdate {
-                id: created[0].id.clone(),
+                id,
                 name: "NewName".to_string(),
                 description: None,
                 tags: None,
@@ -231,7 +258,10 @@ async fn test_update_account_name() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(updated[0].name.to_string(), "NewName");
+    let AccountEvent::Updated(e) = &updated[0] else {
+        panic!("expected Updated")
+    };
+    assert_eq!(e.name.as_deref(), Some("NewName"));
 
     Ok(())
 }
@@ -245,12 +275,13 @@ async fn test_update_reserved_name_fails() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Cash")])
         .await?;
+    let id = created_id(&created);
 
     let err = service
         .update(
             &mut sess,
             [AccountCommandUpdate {
-                id: created[0].id.clone(),
+                id,
                 name: "Equity".to_string(),
                 description: None,
                 tags: None,
@@ -275,10 +306,10 @@ async fn test_delete_cascades_to_children() -> anyhow::Result<()> {
     let jid = JournalId::from("j1");
     let root_id = insert_root(&mut sess, &jid, AccountType::Asset);
 
-    let parent = service
+    let parent_events = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Bank")])
         .await?;
-    let parent_id = parent[0].id.clone();
+    let parent_id = created_id(&parent_events);
 
     service
         .create(&mut sess, [create_cmd(&jid, &parent_id, "Checking")])
@@ -287,7 +318,6 @@ async fn test_delete_cascades_to_children() -> anyhow::Result<()> {
         .create(&mut sess, [create_cmd(&jid, &parent_id, "Savings")])
         .await?;
 
-    // Delete parent — children should be deleted too
     service.delete(&mut sess, [parent_id]).await?;
 
     Ok(())
@@ -312,10 +342,10 @@ async fn test_archive_cascades_to_children() -> anyhow::Result<()> {
     let jid = JournalId::from("j1");
     let root_id = insert_root(&mut sess, &jid, AccountType::Asset);
 
-    let parent = service
+    let parent_events = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Bank")])
         .await?;
-    let parent_id = parent[0].id.clone();
+    let parent_id = created_id(&parent_events);
 
     service
         .create(
@@ -337,10 +367,12 @@ async fn test_archive_cascades_to_children() -> anyhow::Result<()> {
         )
         .await?;
 
-    // Parent + 2 children should all be archived
     assert_eq!(archived.len(), 3);
-    for a in &archived {
-        assert!(a.is_archived(), "{} should be archived", a.name);
+    for event in &archived {
+        assert!(
+            matches!(event, AccountEvent::Archived(_)),
+            "expected Archived event"
+        );
     }
 
     Ok(())
@@ -355,23 +387,23 @@ async fn test_archive_already_archived_is_noop() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Cash")])
         .await?;
+    let id = created_id(&created);
 
     service
         .archive(
             &mut sess,
             AccountCommandArchive {
-                ids: HashSet::from([created[0].id.clone()]),
+                ids: HashSet::from([id.clone()]),
                 archived_at: Utc::now(),
             },
         )
         .await?;
 
-    // Archive again — should return empty (already archived)
     let result = service
         .archive(
             &mut sess,
             AccountCommandArchive {
-                ids: HashSet::from([created[0].id.clone()]),
+                ids: HashSet::from([id]),
                 archived_at: Utc::now(),
             },
         )
@@ -393,15 +425,14 @@ async fn test_batch_rollback_on_failure() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "WillSurvive")])
         .await?;
-    let id = created[0].id.clone();
+    let id = created_id(&created);
 
-    // Batch: delete WillSurvive + create with reserved name (fails)
     let result = service
         .batch(
             &mut sess,
             AccountCommandBatch {
                 delete: HashSet::from([id]),
-                create: vec![create_cmd(&jid, &root_id, "Asset")], // reserved name
+                create: vec![create_cmd(&jid, &root_id, "Asset")],
                 update: vec![],
                 archive: vec![],
             },
@@ -410,7 +441,6 @@ async fn test_batch_rollback_on_failure() -> anyhow::Result<()> {
 
     assert!(result.is_err());
 
-    // WillSurvive should still exist (rollback worked)
     let err = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "WillSurvive")])
         .await;
@@ -440,12 +470,7 @@ async fn test_spec_find_by_id() -> anyhow::Result<()> {
             ],
         )
         .await?;
-    let cash_id = created
-        .iter()
-        .find(|a| a.name.to_string() == "Cash")
-        .unwrap()
-        .id
-        .clone();
+    let cash_id = created_id_by_name(&created, "Cash");
 
     let found = repo
         .find_all(&sess, &AccountSpecification::id(cash_id.clone()), None)
@@ -475,7 +500,6 @@ async fn test_spec_find_by_journal_id() -> anyhow::Result<()> {
     let found = repo
         .find_all(&sess, &AccountSpecification::journal_id(jid1.clone()), None)
         .await?;
-    // root1 + Cash1
     assert!(found.values().any(|a| a.name.to_string() == "Cash1"));
     assert!(found.values().all(|a| a.journal_id == jid1));
 
@@ -489,10 +513,10 @@ async fn test_spec_find_by_parent_id() -> anyhow::Result<()> {
     let jid = JournalId::from("j1");
     let root_id = insert_root(&mut sess, &jid, AccountType::Asset);
 
-    let parent = service
+    let parent_events = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Bank")])
         .await?;
-    let bank_id = parent[0].id.clone();
+    let bank_id = created_id(&parent_events);
     service
         .create(
             &mut sess,
@@ -569,7 +593,7 @@ async fn test_spec_find_by_type() -> anyhow::Result<()> {
     assert!(found.values().all(|a| a.r#type == AccountType::Asset));
     let names: HashSet<_> = found.values().map(|a| a.name.to_string()).collect();
     assert!(names.contains("Cash"));
-    assert!(names.contains("Asset")); // root
+    assert!(names.contains("Asset"));
 
     Ok(())
 }
@@ -584,12 +608,12 @@ async fn test_spec_find_by_tag() -> anyhow::Result<()> {
     let created = service
         .create(&mut sess, [create_cmd(&jid, &root_id, "Cash")])
         .await?;
-    // Update with tags
+    let id = created_id(&created);
     service
         .update(
             &mut sess,
             [AccountCommandUpdate {
-                id: created[0].id.clone(),
+                id,
                 name: String::new(),
                 description: None,
                 tags: Some(HashSet::from(["liquid".to_string(), "primary".to_string()])),
@@ -658,12 +682,7 @@ async fn test_spec_find_archived() -> anyhow::Result<()> {
             ],
         )
         .await?;
-    let old_id = created
-        .iter()
-        .find(|a| a.name.to_string() == "Old")
-        .unwrap()
-        .id
-        .clone();
+    let old_id = created_id_by_name(&created, "Old");
 
     service
         .archive(
@@ -704,7 +723,6 @@ async fn test_spec_all_and() -> anyhow::Result<()> {
         .create(&mut sess, [create_cmd(&jid, &expense_root, "Food")])
         .await?;
 
-    // AND: type=Asset AND name=Cash (excludes root because root name is "Asset")
     let spec =
         AccountSpecification::account_type(AccountType::Asset) & AccountSpecification::name("Cash");
     let found = repo.find_all(&sess, &spec, None).await?;
@@ -759,7 +777,6 @@ async fn test_spec_not() -> anyhow::Result<()> {
         )
         .await?;
 
-    // NOT name=Cash -- should return root + Savings
     let spec = !AccountSpecification::name("Cash");
     let found = repo.find_all(&sess, &spec, None).await?;
     assert!(found.values().all(|a| a.name.to_string() != "Cash"));
