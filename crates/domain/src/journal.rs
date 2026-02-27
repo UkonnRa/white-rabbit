@@ -17,7 +17,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared::{AggregateRoot, DomainModel, NonEmpty};
 
-use crate::journal::event::*;
+use crate::journal::event::JournalEvent;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, DomainModel)]
 pub struct Journal {

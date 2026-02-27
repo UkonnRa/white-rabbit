@@ -6,7 +6,7 @@ use crate::error::ErrorKind;
 use crate::journal::{JournalId, JournalInput};
 use shared::{AggregateRoot, Entity, EntityId};
 
-use super::event::*;
+use super::event::{AccountArchived, AccountCreated, AccountDeleted, AccountEvent, AccountUpdated};
 use super::{Account, AccountContext, AccountId, AccountInput, AccountType};
 
 // ── Input tests ──────────────────────────────────────────────────

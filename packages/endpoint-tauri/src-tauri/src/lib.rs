@@ -1,3 +1,4 @@
+pub mod error;
 pub mod journal;
 pub mod state;
 
@@ -18,13 +19,30 @@ pub fn register_handlers<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    env_logger::init();
+
     register_handlers(tauri::Builder::default())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+
+            let database_url = match std::env::var("DATABASE_URL") {
+                Ok(url) => url,
+                Err(_) => {
+                    // For MacOS, it's `~/Library/Application Support`
+                    // So, when tauri build, do not add DATABASE_URL
+                    let data_dir = app
+                        .path()
+                        .app_data_dir()
+                        .expect("failed to resolve app data dir");
+                    std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
+                    let db_path = data_dir.join("data.db");
+                    format!("sqlite:{}?mode=rwc", db_path.display())
+                }
+            };
+            log::info!("database url: {database_url}");
+
             let state = rt.block_on(async {
-                let database_url =
-                    std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite::memory:".to_string());
                 let db = sea_orm::Database::connect(&database_url)
                     .await
                     .expect("failed to connect to database");

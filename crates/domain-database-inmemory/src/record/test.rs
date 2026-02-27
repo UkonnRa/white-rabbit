@@ -3,14 +3,14 @@ use std::sync::Arc;
 
 use database_inmemory::repository::InMemorySession;
 use domain::account::command::AccountCommandCreate;
-use domain::account::event::*;
+use domain::account::event::AccountEvent;
 use domain::account::service::AccountService;
 use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;
 use domain::record::command::{
     RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
 };
-use domain::record::event::*;
+use domain::record::event::RecordEvent;
 use domain::record::service::RecordService;
 use domain::record::{RecordId, RecordItemKind, RecordItems};
 use shared::{Entity, EntityId};

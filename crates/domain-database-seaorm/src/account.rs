@@ -11,7 +11,11 @@ use domain::account::repository::AccountRepository;
 use domain::account::specification::{AccountSpec, AccountSpecification};
 use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;
-use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Set};
+use sea_orm::prelude::Expr;
+use sea_orm::sea_query::Func;
+use sea_orm::{
+    ColumnTrait, Condition, EntityTrait, ExprTrait, QueryFilter, QuerySelect, QueryTrait, Set,
+};
 use shared::{EntityId, Id, ReadRepository, Result, SpecificationExpression, WriteRepository};
 
 use entity::AccountTypeEnum;
@@ -37,27 +41,27 @@ impl SeaOrmAccountRepository {
                 Condition::any().add(entity::Column::ParentId.is_in(v))
             }
             AccountSpecification::Name(names) => {
-                let v: Vec<String> = names.iter().cloned().collect();
-                Condition::any().add(entity::Column::Name.is_in(v))
+                let v: Vec<String> = names.iter().map(|s| s.to_lowercase()).collect();
+                Condition::any().add(Func::lower(Expr::col(entity::Column::Name)).is_in(v))
             }
             AccountSpecification::Type(types) => {
                 let v: Vec<AccountTypeEnum> = types.iter().map(|t| Self::to_enum(*t)).collect();
                 Condition::any().add(entity::Column::Type.is_in(v))
             }
             AccountSpecification::Tag(tags) => {
-                let v: Vec<String> = tags.iter().cloned().collect();
+                let v: Vec<String> = tags.iter().map(|s| s.to_lowercase()).collect();
                 let subquery = tag_entity::Entity::find()
-                    .filter(tag_entity::Column::Tag.is_in(v))
+                    .filter(Func::lower(Expr::col(tag_entity::Column::Tag)).is_in(v))
                     .select_only()
                     .column(tag_entity::Column::AccountId)
                     .into_query();
                 Condition::any().add(entity::Column::Id.in_subquery(subquery))
             }
             AccountSpecification::FullText(query) => {
-                let pattern = format!("%{query}%");
+                let pattern = format!("%{}%", query.to_lowercase());
                 Condition::any()
-                    .add(entity::Column::Name.contains(&pattern))
-                    .add(entity::Column::Description.contains(&pattern))
+                    .add(Func::lower(Expr::col(entity::Column::Name)).like(&pattern))
+                    .add(Func::lower(Expr::col(entity::Column::Description)).like(&pattern))
             }
             AccountSpecification::Archived(archived) => {
                 if *archived {

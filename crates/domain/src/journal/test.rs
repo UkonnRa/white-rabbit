@@ -5,7 +5,7 @@ use chrono::Utc;
 use crate::error::ErrorKind;
 use shared::{AggregateRoot, Entity, EntityId};
 
-use super::event::*;
+use super::event::{JournalCreated, JournalDeleted, JournalEvent, JournalUpdated};
 use super::{Journal, JournalId, JournalInput};
 
 #[test]

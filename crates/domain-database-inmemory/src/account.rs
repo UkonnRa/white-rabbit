@@ -64,7 +64,12 @@ impl InMemoryAccountRepository {
                 .filter(|s| !s.is_empty())
                 .any(|s| s == po.name.to_lowercase()),
             AccountSpecification::Type(types) => types.contains(&po.r#type),
-            AccountSpecification::Tag(tags) => po.tags.iter().any(|t| tags.contains(t)),
+            AccountSpecification::Tag(tags) => {
+                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
+                po.tags
+                    .iter()
+                    .any(|t| lower_tags.contains(&t.to_lowercase()))
+            }
             AccountSpecification::FullText(query) => {
                 let query = query.trim().to_lowercase();
                 po.name.to_lowercase().contains(&query)

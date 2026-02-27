@@ -10,7 +10,11 @@ use database_seaorm::repository::{SeaOrmReadRepository, SeaOrmSession, SeaOrmWri
 use domain::journal::repository::JournalRepository;
 use domain::journal::specification::{JournalSpec, JournalSpecification};
 use domain::journal::{Journal, JournalId};
-use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Set};
+use sea_orm::prelude::Expr;
+use sea_orm::sea_query::Func;
+use sea_orm::{
+    ColumnTrait, Condition, EntityTrait, ExprTrait, QueryFilter, QuerySelect, QueryTrait, Set,
+};
 use shared::{EntityId, Id, ReadRepository, Result, SpecificationExpression, WriteRepository};
 
 // ── Stateless Repository ─────────────────────────────────────────
@@ -26,23 +30,23 @@ impl SeaOrmJournalRepository {
                 Condition::any().add(entity::Column::Id.is_in(values))
             }
             JournalSpecification::Name(names) => {
-                let values: Vec<String> = names.iter().cloned().collect();
-                Condition::any().add(entity::Column::Name.is_in(values))
+                let values: Vec<String> = names.iter().map(|s| s.to_lowercase()).collect();
+                Condition::any().add(Func::lower(Expr::col(entity::Column::Name)).is_in(values))
             }
             JournalSpecification::Tag(tags) => {
-                let values: Vec<String> = tags.iter().cloned().collect();
+                let values: Vec<String> = tags.iter().map(|s| s.to_lowercase()).collect();
                 let subquery = tag_entity::Entity::find()
-                    .filter(tag_entity::Column::Tag.is_in(values))
+                    .filter(Func::lower(Expr::col(tag_entity::Column::Tag)).is_in(values))
                     .select_only()
                     .column(tag_entity::Column::JournalId)
                     .into_query();
                 Condition::any().add(entity::Column::Id.in_subquery(subquery))
             }
             JournalSpecification::FullText(query) => {
-                let pattern = format!("%{query}%");
+                let pattern = format!("%{}%", query.to_lowercase());
                 Condition::any()
-                    .add(entity::Column::Name.contains(&pattern))
-                    .add(entity::Column::Description.contains(&pattern))
+                    .add(Func::lower(Expr::col(entity::Column::Name)).like(&pattern))
+                    .add(Func::lower(Expr::col(entity::Column::Description)).like(&pattern))
             }
         }
     }

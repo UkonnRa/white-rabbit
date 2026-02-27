@@ -11,7 +11,7 @@ mod value;
 pub use input::*;
 pub use value::*;
 
-use crate::record::event::*;
+use crate::record::event::RecordEvent;
 use crate::{account::AccountType, journal::JournalId};
 use chrono::{DateTime, NaiveDate, Utc};
 use itertools::Itertools;

@@ -7,7 +7,7 @@ use sea_orm::Database;
 
 use database_seaorm_migration::{Migrator, MigratorTrait};
 use domain::account::command::{AccountCommandArchive, AccountCommandCreate, AccountCommandUpdate};
-use domain::account::event::*;
+use domain::account::event::AccountEvent;
 use domain::account::service::AccountService;
 use domain::account::{Account, AccountId, AccountInput, AccountType};
 use domain::journal::JournalId;

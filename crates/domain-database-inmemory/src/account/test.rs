@@ -6,7 +6,7 @@ use database_inmemory::repository::InMemorySession;
 use domain::account::command::{
     AccountCommandArchive, AccountCommandBatch, AccountCommandCreate, AccountCommandUpdate,
 };
-use domain::account::event::*;
+use domain::account::event::AccountEvent;
 use domain::account::service::AccountService;
 use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;

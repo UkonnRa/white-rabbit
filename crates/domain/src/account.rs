@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use shared::{AggregateRoot, DomainModel, NonEmpty};
 
-use crate::account::event::*;
+use crate::account::event::AccountEvent;
 use crate::journal::JournalId;
 
 /// The Account is a tree, the root Account is one of the 5 types: Asset, Liability, Equity, Income, Expense

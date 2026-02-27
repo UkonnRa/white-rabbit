@@ -6,7 +6,7 @@ use crate::error::Result;
 use crate::record::command::{
     RecordCommand, RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
 };
-use crate::record::event::*;
+use crate::record::event::{RecordCreated, RecordDeleted, RecordEvent, RecordUpdated};
 use crate::record::repository::RecordRepository;
 use crate::record::{
     AmountInput, CostInput, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind,

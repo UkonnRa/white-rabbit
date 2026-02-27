@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::{HashMap, HashSet};
+
 use chrono::{DateTime, NaiveDate, Utc};
 use database_inmemory::repository::{
     InMemoryReadRepository, InMemorySession, InMemoryWriteRepository,
@@ -11,7 +13,6 @@ use domain::record::repository::RecordRepository;
 use domain::record::specification::{RecordSpec, RecordSpecification};
 use domain::record::{Record, RecordId, RecordItemKind, RecordItems};
 use shared::{Id, Persistence, ReadRepository, Result, WriteRepository};
-use std::collections::{HashMap, HashSet};
 
 // ── Persistence Object ───────────────────────────────────────────
 
@@ -78,8 +79,16 @@ impl InMemoryRecordRepository {
             RecordSpecification::Date(dates) => dates.contains(&po.date),
             RecordSpecification::DateFrom(date) => po.date >= *date,
             RecordSpecification::DateTo(date) => po.date <= *date,
-            RecordSpecification::Payee(payees) => payees.contains(&po.payee),
-            RecordSpecification::Tag(tags) => po.tags.iter().any(|t| tags.contains(t)),
+            RecordSpecification::Payee(payees) => {
+                let lower_payee = po.payee.to_lowercase();
+                payees.iter().any(|p| p.to_lowercase() == lower_payee)
+            }
+            RecordSpecification::Tag(tags) => {
+                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
+                po.tags
+                    .iter()
+                    .any(|t| lower_tags.contains(&t.to_lowercase()))
+            }
             RecordSpecification::ItemKind(kind) => po.kind() == *kind,
             RecordSpecification::FullText(query) => {
                 let query = query.trim().to_lowercase();

@@ -8,4 +8,4 @@ export type {
 export type { JournalClient } from "./clients";
 
 export { JournalListPage } from "./pages";
-export { JournalCard } from "./components";
+export { JournalCard, JournalForm, JournalFilter as JournalFilterBar } from "./components";

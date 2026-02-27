@@ -7,7 +7,7 @@ use sea_orm::Database;
 use database_seaorm_migration::{Migrator, MigratorTrait};
 use domain::journal::JournalId;
 use domain::journal::command::{JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate};
-use domain::journal::event::*;
+use domain::journal::event::JournalEvent;
 use domain::journal::service::JournalService;
 
 use super::SeaOrmJournalRepository;
@@ -720,6 +720,92 @@ async fn test_spec_limit() -> anyhow::Result<()> {
     let spec = JournalSpecification::names(["A", "B", "C", "D"]);
     let found = repo.find_all(&sess, &spec, Some(2)).await?;
     assert_eq!(found.len(), 2);
+
+    Ok(())
+}
+
+// ── Case-insensitive query tests ─────────────────────────────────
+
+#[tokio::test]
+async fn test_spec_find_by_name_case_insensitive() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(&mut sess, [create_cmd("Personal Ledger")])
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::name("personal ledger"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::name("PERSONAL LEDGER"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_tag_case_insensitive() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [JournalCommandCreate {
+                name: "Tagged".to_string(),
+                description: String::new(),
+                tags: HashSet::from(["Finance".to_string()]),
+            }],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::tag("finance"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::tag("FINANCE"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_spec_find_by_full_text_case_insensitive() -> anyhow::Result<()> {
+    let (service, mut sess) = new_service().await;
+    let repo = SeaOrmJournalRepository;
+
+    service
+        .create(
+            &mut sess,
+            [JournalCommandCreate {
+                name: "Investment Portfolio".to_string(),
+                description: "Tracks Stock Holdings".to_string(),
+                tags: HashSet::new(),
+            }],
+        )
+        .await?;
+
+    let found = repo
+        .find_all(&sess, &JournalSpecification::full_text("investment"), None)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    let found = repo
+        .find_all(
+            &sess,
+            &JournalSpecification::full_text("STOCK HOLDINGS"),
+            None,
+        )
+        .await?;
+    assert_eq!(found.len(), 1);
 
     Ok(())
 }

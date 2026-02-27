@@ -4,7 +4,9 @@ use crate::account::command::{
     AccountCommand, AccountCommandArchive, AccountCommandBatch, AccountCommandCreate,
     AccountCommandUpdate,
 };
-use crate::account::event::*;
+use crate::account::event::{
+    AccountArchived, AccountCreated, AccountDeleted, AccountEvent, AccountUpdated,
+};
 use crate::account::repository::AccountRepository;
 use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId, AccountInput};
@@ -259,6 +261,101 @@ impl<R: AccountRepository> AccountService<R> {
             .collect())
     }
 
+    fn validate_update_ids(commands: &[AccountCommandUpdate]) -> Result<HashSet<&AccountId>> {
+        let batch_ids: HashSet<_> = commands.iter().map(|c| &c.id).collect();
+        if batch_ids.len() != commands.len() {
+            return Err(ErrorKind::duplicate_values("id")
+                .with_resource_type(Account::ENTITY_TYPE)
+                .with_field("id")
+                .convert());
+        }
+        Ok(batch_ids)
+    }
+
+    fn validate_update_names(commands: &[AccountCommandUpdate]) -> Result<()> {
+        let mut new_names: HashSet<&str> = HashSet::new();
+        for cmd in commands {
+            if cmd.name.is_empty() {
+                continue;
+            }
+            if Account::is_reserved_name(&cmd.name) {
+                return Err(ErrorKind::conflict()
+                    .with_resource_type(Account::ENTITY_TYPE)
+                    .with_field("name")
+                    .with_detail(format!("'{}' is a reserved root account name", cmd.name))
+                    .convert());
+            }
+            if !new_names.insert(&cmd.name) {
+                return Err(ErrorKind::duplicate_values(&cmd.name)
+                    .with_resource_type(Account::ENTITY_TYPE)
+                    .with_field("name")
+                    .convert());
+            }
+        }
+        Ok(())
+    }
+
+    async fn validate_update_name_conflicts(
+        repo: &R,
+        sess: &mut R::Session,
+        commands: &[AccountCommandUpdate],
+        existing: &HashMap<AccountId, Account>,
+        batch_ids: &HashSet<&AccountId>,
+    ) -> Result<()> {
+        for cmd in commands {
+            if cmd.name.is_empty() {
+                continue;
+            }
+            let account = &existing[&cmd.id];
+            let Some(parent_id) = &account.parent_id else {
+                continue;
+            };
+            let spec = AccountSpecification::parent_id(parent_id.clone())
+                & AccountSpecification::name(&cmd.name);
+            let conflicts = repo
+                .find_all(sess, &spec, None)
+                .await
+                .map_err(|e| e.convert())?;
+            for (conflict_id, conflict) in &conflicts {
+                if !batch_ids.contains(conflict_id) {
+                    return Err(ErrorKind::duplicate_values(&conflict.name)
+                        .with_resource_type(Account::ENTITY_TYPE)
+                        .with_field("name")
+                        .convert());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn build_updated_account(account: &Account, cmd: &AccountCommandUpdate) -> Result<Account> {
+        let input = AccountInput {
+            id: account.id.clone(),
+            version: account.version,
+            created_at: account.created_at,
+            last_modified_at: account.last_modified_at,
+            archived_at: account.archived_at,
+            journal_id: account.journal_id.clone(),
+            parent_id: account.parent_id.clone(),
+            r#type: account.r#type,
+            name: if cmd.name.is_empty() {
+                account.name.to_string()
+            } else {
+                cmd.name.clone()
+            },
+            description: cmd
+                .description
+                .clone()
+                .unwrap_or_else(|| account.description.clone()),
+            tags: cmd
+                .tags
+                .clone()
+                .map(|t| t.into_iter().collect())
+                .unwrap_or_else(|| account.tags.iter().map(|t| t.to_string()).collect()),
+        };
+        input.try_into()
+    }
+
     async fn do_update(
         repo: &R,
         sess: &mut R::Session,
@@ -269,14 +366,8 @@ impl<R: AccountRepository> AccountService<R> {
         }
 
         let now = Utc::now();
-
-        let batch_ids: HashSet<_> = commands.iter().map(|c| &c.id).collect();
-        if batch_ids.len() != commands.len() {
-            return Err(ErrorKind::duplicate_values("id")
-                .with_resource_type(Account::ENTITY_TYPE)
-                .with_field("id")
-                .convert());
-        }
+        let batch_ids = Self::validate_update_ids(&commands)?;
+        Self::validate_update_names(&commands)?;
 
         let id_vec: Vec<_> = commands.iter().map(|c| c.id.clone()).collect();
         let existing = repo
@@ -294,83 +385,14 @@ impl<R: AccountRepository> AccountService<R> {
             }
         }
 
-        for cmd in &commands {
-            if !cmd.name.is_empty() && Account::is_reserved_name(&cmd.name) {
-                return Err(ErrorKind::conflict()
-                    .with_resource_type(Account::ENTITY_TYPE)
-                    .with_field("name")
-                    .with_detail(format!("'{}' is a reserved root account name", cmd.name))
-                    .convert());
-            }
-        }
-
-        let mut new_names: HashSet<&str> = HashSet::new();
-        for cmd in &commands {
-            if !cmd.name.is_empty() && !new_names.insert(&cmd.name) {
-                return Err(ErrorKind::duplicate_values(&cmd.name)
-                    .with_resource_type(Account::ENTITY_TYPE)
-                    .with_field("name")
-                    .convert());
-            }
-        }
-
-        for cmd in &commands {
-            if cmd.name.is_empty() {
-                continue;
-            }
-            let account = &existing[&cmd.id];
-            if let Some(parent_id) = &account.parent_id {
-                let spec = AccountSpecification::parent_id(parent_id.clone())
-                    & AccountSpecification::name(&cmd.name);
-                let conflicts = repo
-                    .find_all(sess, &spec, None)
-                    .await
-                    .map_err(|e| e.convert())?;
-                for (conflict_id, conflict) in &conflicts {
-                    if !batch_ids.contains(conflict_id) {
-                        return Err(ErrorKind::duplicate_values(&conflict.name)
-                            .with_resource_type(Account::ENTITY_TYPE)
-                            .with_field("name")
-                            .convert());
-                    }
-                }
-            }
-        }
+        Self::validate_update_name_conflicts(repo, sess, &commands, &existing, &batch_ids).await?;
 
         let commands_by_id: HashMap<_, _> =
             commands.into_iter().map(|c| (c.id.clone(), c)).collect();
 
         let accounts = id_vec
             .iter()
-            .map(|id| {
-                let account = &existing[id];
-                let cmd = &commands_by_id[id];
-                let input = AccountInput {
-                    id: account.id.clone(),
-                    version: account.version,
-                    created_at: account.created_at,
-                    last_modified_at: account.last_modified_at,
-                    archived_at: account.archived_at,
-                    journal_id: account.journal_id.clone(),
-                    parent_id: account.parent_id.clone(),
-                    r#type: account.r#type,
-                    name: if cmd.name.is_empty() {
-                        account.name.to_string()
-                    } else {
-                        cmd.name.clone()
-                    },
-                    description: cmd
-                        .description
-                        .clone()
-                        .unwrap_or_else(|| account.description.clone()),
-                    tags: cmd
-                        .tags
-                        .clone()
-                        .map(|t| t.into_iter().collect())
-                        .unwrap_or_else(|| account.tags.iter().map(|t| t.to_string()).collect()),
-                };
-                input.try_into()
-            })
+            .map(|id| Self::build_updated_account(&existing[id], &commands_by_id[id]))
             .collect::<Result<Vec<_>>>()?;
 
         let saved = repo

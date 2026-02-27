@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use shared::{EntityId, ReadRepository};
 
+use crate::error::CommandError;
 use crate::state::AppState;
 use dto::{CreateJournalRequest, JournalFilter, JournalResponse, UpdateJournalRequest};
 
@@ -26,7 +27,7 @@ pub async fn create_journal(
         .journal_service
         .create(&mut sess, [cmd])
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(CommandError::from_domain)?;
 
     let created_id = events
         .iter()
@@ -40,8 +41,8 @@ pub async fn create_journal(
         .journal_repo
         .find_one_by_id(&sess, &created_id)
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "journal not found after creation".to_string())?;
+        .map_err(CommandError::from_shared)?
+        .ok_or_else(|| String::from("journal not found after creation"))?;
 
     Ok(JournalResponse::from_journal(&journal))
 }
@@ -60,7 +61,7 @@ pub async fn get_journal(
         .journal_repo
         .find_one_by_id(&sess, &journal_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(CommandError::from_shared)?
         .ok_or_else(|| format!("journal {id} not found"))?;
 
     Ok(JournalResponse::from_journal(&journal))
@@ -107,7 +108,7 @@ pub async fn list_journals(
         .journal_repo
         .find_all(&sess, &spec, None)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(CommandError::from_shared)?;
 
     Ok(journals
         .values()
@@ -137,13 +138,13 @@ pub async fn update_journal(
         .journal_service
         .update(&mut sess, [cmd])
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(CommandError::from_domain)?;
 
     let journal = state
         .journal_repo
         .find_one_by_id(&sess, &journal_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(CommandError::from_shared)?
         .ok_or_else(|| format!("journal {id} not found after update"))?;
 
     Ok(JournalResponse::from_journal(&journal))
@@ -160,7 +161,7 @@ pub async fn delete_journal(state: tauri::State<'_, AppState>, id: String) -> Re
         .journal_service
         .delete(&mut sess, [journal_id])
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(CommandError::from_domain)?;
 
     Ok(())
 }

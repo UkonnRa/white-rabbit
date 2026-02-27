@@ -8,7 +8,7 @@ use crate::{
 use chrono::{NaiveDate, Utc};
 use shared::{AggregateRoot, Entity, EntityId};
 
-use super::event::*;
+use super::event::{RecordCreated, RecordDeleted, RecordEvent, RecordUpdated};
 use super::{Amount, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind};
 
 #[test]

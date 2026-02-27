@@ -55,7 +55,12 @@ impl InMemoryJournalRepository {
                 .map(|s| s.trim().to_lowercase())
                 .filter(|s| !s.is_empty())
                 .any(|s| s == po.name.to_lowercase()),
-            JournalSpecification::Tag(tags) => po.tags.iter().any(|t| tags.contains(t)),
+            JournalSpecification::Tag(tags) => {
+                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
+                po.tags
+                    .iter()
+                    .any(|t| lower_tags.contains(&t.to_lowercase()))
+            }
             JournalSpecification::FullText(query) => {
                 let query = query.trim().to_lowercase();
                 po.name.to_lowercase().contains(&query)

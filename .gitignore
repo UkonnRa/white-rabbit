@@ -32,3 +32,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 .DS_Store
+
+# SQLite dev database
+data.db*

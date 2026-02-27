@@ -4,7 +4,7 @@ use crate::error::Result;
 use crate::journal::command::{
     JournalCommand, JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate,
 };
-use crate::journal::event::*;
+use crate::journal::event::{JournalCreated, JournalDeleted, JournalEvent, JournalUpdated};
 use crate::journal::repository::JournalRepository;
 use crate::journal::specification::JournalSpecification;
 use crate::journal::{Journal, JournalId, JournalInput};

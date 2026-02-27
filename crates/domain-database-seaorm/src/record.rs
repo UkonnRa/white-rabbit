@@ -17,7 +17,11 @@ use domain::record::{
     RecordItems,
 };
 use entity::RecordKindEnum;
-use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter, QuerySelect, QueryTrait, Set};
+use sea_orm::prelude::Expr;
+use sea_orm::sea_query::Func;
+use sea_orm::{
+    ColumnTrait, Condition, EntityTrait, ExprTrait, QueryFilter, QuerySelect, QueryTrait, Set,
+};
 use shared::{
     EntityId, Id, NonEmpty, NonNegative, ReadRepository, Result, SpecificationExpression,
     WriteRepository,
@@ -59,13 +63,13 @@ impl SeaOrmRecordRepository {
                 Condition::all().add(entity::Column::Date.lte(*date))
             }
             RecordSpecification::Payee(payees) => {
-                let v: Vec<String> = payees.iter().cloned().collect();
-                Condition::any().add(entity::Column::Payee.is_in(v))
+                let v: Vec<String> = payees.iter().map(|s| s.to_lowercase()).collect();
+                Condition::any().add(Func::lower(Expr::col(entity::Column::Payee)).is_in(v))
             }
             RecordSpecification::Tag(tags) => {
-                let v: Vec<String> = tags.iter().cloned().collect();
+                let v: Vec<String> = tags.iter().map(|s| s.to_lowercase()).collect();
                 let subquery = tag_entity::Entity::find()
-                    .filter(tag_entity::Column::Tag.is_in(v))
+                    .filter(Func::lower(Expr::col(tag_entity::Column::Tag)).is_in(v))
                     .select_only()
                     .column(tag_entity::Column::RecordId)
                     .into_query();
@@ -76,10 +80,10 @@ impl SeaOrmRecordRepository {
                 Condition::all().add(entity::Column::Kind.eq(kind_enum))
             }
             RecordSpecification::FullText(query) => {
-                let pattern = format!("%{query}%");
+                let pattern = format!("%{}%", query.to_lowercase());
                 Condition::any()
-                    .add(entity::Column::Description.contains(&pattern))
-                    .add(entity::Column::Payee.contains(&pattern))
+                    .add(Func::lower(Expr::col(entity::Column::Description)).like(&pattern))
+                    .add(Func::lower(Expr::col(entity::Column::Payee)).like(&pattern))
             }
         }
     }
