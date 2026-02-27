@@ -1,0 +1,24 @@
+[package]
+name = "endpoint-hal"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+axum = "0.8"
+chrono.workspace = true
+database-seaorm = { path = "../database-seaorm" }
+database-seaorm-migration = { path = "../database-seaorm-migration" }
+domain = { path = "../domain" }
+domain-database-seaorm = { path = "../domain-database-seaorm" }
+sea-orm = { workspace = true, features = ["sqlx-sqlite"] }
+sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
+serde.workspace = true
+serde_json.workspace = true
+shared = { path = "../shared" }
+tokio.workspace = true
+tower-http = { version = "0.6", features = ["fs"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }

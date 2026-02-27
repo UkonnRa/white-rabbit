@@ -5,12 +5,12 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-shared = { path = "../shared" }
-domain = { path = "../domain" }
-database-inmemory = { path = "../database-inmemory" }
+anyhow.workspace = true
 async-trait.workspace = true
+chrono.workspace = true
+database-inmemory = { path = "../database-inmemory" }
+domain = { path = "../domain" }
 serde.workspace = true
 serde_json.workspace = true
-chrono.workspace = true
-anyhow.workspace = true
+shared = { path = "../shared" }
 tokio.workspace = true

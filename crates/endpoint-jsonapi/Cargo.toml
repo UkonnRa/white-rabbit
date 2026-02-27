@@ -1,8 +1,0 @@
-[package]
-name = "endpoint-jsonapi"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-
-[dependencies]
-domain = { path = "../domain" }

@@ -57,9 +57,14 @@ install_crate = { crate_name = "rumdl", binary = "rumdl", test_arg = "--version"
 command = "rumdl"
 args = ["check", "--fix", "docs/", "AGENTS.md"]
 
+[tasks.lint-fix-cargo-sort]
+install_crate = { crate_name = "cargo-sort", binary = "cargo-sort", test_arg = "--version" }
+command = "cargo"
+args = ["sort", "--workspace", "--grouped"]
+
 [tasks.lint-fix]
 run_task = [
-    { name = ["lint-fix-rustfmt", "lint-fix-clippy", "lint-fix-md"] },
+    { name = ["lint-fix-cargo-sort", "lint-fix-rustfmt", "lint-fix-clippy", "lint-fix-md"] },
 ]
 
 # =============================================================================

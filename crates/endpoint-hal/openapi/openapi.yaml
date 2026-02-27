@@ -1,0 +1,281 @@
+openapi: 3.2.0
+info:
+  title: White Rabbit HAL API
+  version: 0.1.0
+  description: HAL+JSON REST API for the White Rabbit accounting system.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+# ═══════════════════════════════════════════════════════════════════
+# Paths – Journal
+# ═══════════════════════════════════════════════════════════════════
+
+paths:
+  /journals:
+    post:
+      operationId: createJournal
+      summary: Create a journal
+      tags: [Journal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJournalRequest"
+      responses:
+        "201":
+          description: Journal created
+          content:
+            application/hal+json:
+              schema:
+                $ref: "#/components/schemas/JournalHalResource"
+        "422":
+          description: Validation error (empty name, duplicate name, etc.)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+    get:
+      operationId: listJournals
+      summary: List and filter journals
+      tags: [Journal]
+      parameters:
+        - name: "filter[id]"
+          in: query
+          schema:
+            type: string
+          description: Comma-separated journal IDs for exact match.
+        - name: "filter[name]"
+          in: query
+          schema:
+            type: string
+          description: Exact match by journal name.
+        - name: "filter[tag]"
+          in: query
+          schema:
+            type: string
+          description: Comma-separated tags; matches journals with any of the given tags.
+        - name: "filter[fullText]"
+          in: query
+          schema:
+            type: string
+          description: Full-text search across name, description, and tags.
+      responses:
+        "200":
+          description: Collection of journals
+          content:
+            application/hal+json:
+              schema:
+                $ref: "#/components/schemas/JournalHalCollection"
+
+  /journals/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Journal ID.
+
+    get:
+      operationId: getJournal
+      summary: Get a journal by ID
+      tags: [Journal]
+      responses:
+        "200":
+          description: Journal found
+          content:
+            application/hal+json:
+              schema:
+                $ref: "#/components/schemas/JournalHalResource"
+        "404":
+          description: Journal not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+    patch:
+      operationId: updateJournal
+      summary: Update a journal
+      tags: [Journal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJournalRequest"
+      responses:
+        "200":
+          description: Journal updated
+          content:
+            application/hal+json:
+              schema:
+                $ref: "#/components/schemas/JournalHalResource"
+        "404":
+          description: Journal not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "422":
+          description: Validation error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+    delete:
+      operationId: deleteJournal
+      summary: Delete a journal
+      tags: [Journal]
+      responses:
+        "204":
+          description: Journal deleted (or did not exist)
+        "500":
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+# ═══════════════════════════════════════════════════════════════════
+# Components
+# ═══════════════════════════════════════════════════════════════════
+
+components:
+  schemas:
+
+    # ── Common ──────────────────────────────────────────────────────
+
+    HalLink:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+
+    ProblemDetail:
+      type: object
+      description: RFC 9457 Problem Details
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          default: "about:blank"
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        field:
+          type: string
+
+    # ── Journal ─────────────────────────────────────────────────────
+
+    CreateJournalRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          default: ""
+        tags:
+          type: array
+          items:
+            type: string
+          default: []
+
+    UpdateJournalRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: New name. Send empty string or omit to keep current.
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    JournalProperties:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_modified_at:
+          type: string
+          format: date-time
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    JournalHalResource:
+      allOf:
+        - type: object
+          required:
+            - _links
+          properties:
+            _links:
+              type: object
+              required:
+                - self
+              properties:
+                self:
+                  $ref: "#/components/schemas/HalLink"
+        - $ref: "#/components/schemas/JournalProperties"
+
+    JournalHalCollection:
+      type: object
+      required:
+        - _links
+        - total
+        - _embedded
+      properties:
+        _links:
+          type: object
+          required:
+            - self
+          properties:
+            self:
+              $ref: "#/components/schemas/HalLink"
+        total:
+          type: integer
+        _embedded:
+          type: object
+          properties:
+            journals:
+              type: array
+              items:
+                $ref: "#/components/schemas/JournalHalResource"

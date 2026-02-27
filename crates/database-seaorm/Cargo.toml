@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-shared = { path = "../shared" }
-sea-orm.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
+sea-orm.workspace = true
+shared = { path = "../shared" }

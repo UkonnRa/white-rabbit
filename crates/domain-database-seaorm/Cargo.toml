@@ -5,19 +5,19 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-shared = { path = "../shared" }
-domain = { path = "../domain" }
-database-seaorm = { path = "../database-seaorm" }
-sea-orm.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
-uuid.workspace = true
-serde_json.workspace = true
+database-seaorm = { path = "../database-seaorm" }
+domain = { path = "../domain" }
 rust_decimal.workspace = true
+sea-orm.workspace = true
+serde_json.workspace = true
+shared = { path = "../shared" }
+uuid.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
 anyhow.workspace = true
 database-seaorm-migration = { path = "../database-seaorm-migration" }
 sea-orm = { workspace = true, features = ["sqlx-sqlite"] }
 sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
+tokio.workspace = true
