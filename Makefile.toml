@@ -1,6 +1,48 @@
 [config]
 default_to_workspace = false
 
+# =============================================================================
+# Prerequisites
+# =============================================================================
+
+[tasks.check-pipx]
+script = '''
+if ! command -v pipx &> /dev/null; then
+    echo ""
+    echo "ERROR: pipx is not installed."
+    echo ""
+    echo "Please install pipx first:"
+    echo "  macOS:  brew install pipx && pipx ensurepath"
+    echo "  Linux:  sudo apt install pipx && pipx ensurepath"
+    echo "  pip:    python3 -m pip install --user pipx && python3 -m pipx ensurepath"
+    echo ""
+    echo "See https://github.com/pypa/pipx for details."
+    exit 1
+fi
+'''
+
+[tasks.install-commitizen]
+dependencies = ["check-pipx"]
+install_script = '''
+if command -v cz &> /dev/null; then
+    exit 0
+fi
+pipx install commitizen
+'''
+
+[tasks.install-pre-commit]
+dependencies = ["check-pipx"]
+install_script = '''
+if command -v pre-commit &> /dev/null; then
+    exit 0
+fi
+pipx install pre-commit
+'''
+
+# =============================================================================
+# Linting
+# =============================================================================
+
 [tasks.lint-fix-rustfmt]
 toolchain = "nightly"
 command = "cargo"
@@ -20,23 +62,18 @@ run_task = [
     { name = ["lint-fix-rustfmt", "lint-fix-clippy", "lint-fix-md"] },
 ]
 
+# =============================================================================
+# Commit
+# =============================================================================
+
 [tasks.commit]
-install_script = '''
-if command -v cz &> /dev/null; then
-    exit 0
-fi
-if command -v pipx &> /dev/null; then
-    pipx install commitizen
-elif command -v uv &> /dev/null; then
-    uv tool install commitizen
-elif command -v pip3 &> /dev/null; then
-    pip3 install --user commitizen
-else
-    pip install --user commitizen
-fi
-'''
+dependencies = ["install-commitizen"]
 command = "cz"
 args = ["commit"]
+
+# =============================================================================
+# Dependency Management
+# =============================================================================
 
 [tasks.upgrade-1]
 command = "cargo"
@@ -47,7 +84,14 @@ install_crate = { crate_name = "cargo-edit", binary = "cargo-upgrade", test_arg 
 command = "cargo"
 args = ["upgrade", "--incompatible", "--pinned"]
 
+[tasks.upgrade-pipx]
+dependencies = ["check-pipx"]
+script = '''
+pipx upgrade commitizen || true
+pipx upgrade pre-commit || true
+'''
+
 [tasks.upgrade]
 run_task = [
-    { name = ["upgrade-1", "upgrade-2"] },
+    { name = ["upgrade-1", "upgrade-2", "upgrade-pipx"] },
 ]
