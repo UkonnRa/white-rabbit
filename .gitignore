@@ -1,4 +1,34 @@
+# Rust
 /target
+.rumdl_cache
 
+# Node
+node_modules
+dist
+dist-ssr
+*.local
+
+# Yarn (Berry / v4)
+.yarn/cache
+.yarn/install-state.gz
+.yarn/unplugged
+.pnp.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor
 .idea
 *.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store

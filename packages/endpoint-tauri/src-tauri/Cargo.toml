@@ -1,0 +1,31 @@
+[package]
+name = "endpoint-tauri"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "White Rabbit Tauri App"
+
+[lib]
+name = "endpoint_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+chrono.workspace = true
+database-seaorm = { path = "../../../crates/database-seaorm" }
+database-seaorm-migration = { path = "../../../crates/database-seaorm-migration" }
+domain = { path = "../../../crates/domain" }
+domain-database-seaorm = { path = "../../../crates/domain-database-seaorm" }
+sea-orm = { workspace = true, features = ["sqlx-sqlite"] }
+sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
+serde.workspace = true
+serde_json.workspace = true
+shared = { path = "../../../crates/shared" }
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tokio.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
