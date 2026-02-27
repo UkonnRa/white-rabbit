@@ -20,6 +20,24 @@ run_task = [
     { name = ["lint-fix-rustfmt", "lint-fix-clippy", "lint-fix-md"] },
 ]
 
+[tasks.commit]
+install_script = '''
+if command -v cz &> /dev/null; then
+    exit 0
+fi
+if command -v pipx &> /dev/null; then
+    pipx install commitizen
+elif command -v uv &> /dev/null; then
+    uv tool install commitizen
+elif command -v pip3 &> /dev/null; then
+    pip3 install --user commitizen
+else
+    pip install --user commitizen
+fi
+'''
+command = "cz"
+args = ["commit"]
+
 [tasks.upgrade-1]
 command = "cargo"
 args = ["update"]
