@@ -7,7 +7,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
-use shared::{EntityId, ReadRepository};
+use shared::{EntityId, ReadRepository, WriteService};
 
 use crate::error::ProblemDetail;
 use crate::hal::HalCollection;
@@ -43,25 +43,19 @@ pub async fn create_journal(
         tags: body.tags,
     };
 
-    let events = state
+    let result = state
         .journal_service
-        .create(&mut sess, [cmd])
+        .handle(
+            &mut sess,
+            domain::journal::command::JournalCommand::Create(cmd),
+        )
         .await
         .map_err(|e| ProblemDetail::from_domain_error(e, "/journals"))?;
 
-    let created_id = events
-        .iter()
-        .find_map(|e| match e {
-            domain::journal::event::JournalEvent::Created(c) => Some(c.id.clone()),
-            _ => None,
-        })
-        .expect("create must produce a Created event");
-
-    let journal = state
-        .journal_repo
-        .find_one_by_id(&sess, &created_id)
-        .await
-        .map_err(|e: shared::Error| ProblemDetail::from_domain_error(e.convert(), "/journals"))?
+    let journal = result
+        .entities
+        .into_iter()
+        .next()
         .ok_or_else(|| ProblemDetail::not_found("/journals"))?;
 
     let hal = JournalProperties::from(&journal).into_hal();
@@ -180,17 +174,19 @@ pub async fn update_journal(
         tags: body.tags,
     };
 
-    state
+    let result = state
         .journal_service
-        .update(&mut sess, [cmd])
+        .handle(
+            &mut sess,
+            domain::journal::command::JournalCommand::Update(cmd),
+        )
         .await
         .map_err(|e| ProblemDetail::from_domain_error(e, &instance))?;
 
-    let journal = state
-        .journal_repo
-        .find_one_by_id(&sess, &journal_id)
-        .await
-        .map_err(|e: shared::Error| ProblemDetail::from_domain_error(e.convert(), &instance))?
+    let journal = result
+        .entities
+        .into_iter()
+        .next()
         .ok_or_else(|| ProblemDetail::not_found(&instance))?;
 
     let hal = JournalProperties::from(&journal).into_hal();
@@ -209,7 +205,10 @@ pub async fn delete_journal(
 
     state
         .journal_service
-        .delete(&mut sess, [journal_id])
+        .handle(
+            &mut sess,
+            domain::journal::command::JournalCommand::Delete(HashSet::from([journal_id])),
+        )
         .await
         .map_err(|e| ProblemDetail::from_domain_error(e, &instance))?;
 

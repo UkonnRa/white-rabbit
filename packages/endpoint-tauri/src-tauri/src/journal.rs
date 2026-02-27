@@ -2,7 +2,7 @@ pub mod dto;
 
 use std::collections::HashSet;
 
-use shared::{EntityId, ReadRepository};
+use shared::{EntityId, ReadRepository, WriteService};
 
 use crate::error::CommandError;
 use crate::state::AppState;
@@ -23,25 +23,19 @@ pub async fn create_journal(
         tags: request.tags,
     };
 
-    let events = state
+    let result = state
         .journal_service
-        .create(&mut sess, [cmd])
+        .handle(
+            &mut sess,
+            domain::journal::command::JournalCommand::Create(cmd),
+        )
         .await
         .map_err(CommandError::from_domain)?;
 
-    let created_id = events
-        .iter()
-        .find_map(|e| match e {
-            domain::journal::event::JournalEvent::Created(c) => Some(c.id.clone()),
-            _ => None,
-        })
-        .expect("create must produce a Created event");
-
-    let journal = state
-        .journal_repo
-        .find_one_by_id(&sess, &created_id)
-        .await
-        .map_err(CommandError::from_shared)?
+    let journal = result
+        .entities
+        .into_iter()
+        .next()
         .ok_or_else(|| String::from("journal not found after creation"))?;
 
     Ok(JournalResponse::from_journal(&journal))
@@ -134,17 +128,19 @@ pub async fn update_journal(
         tags: request.tags,
     };
 
-    state
+    let result = state
         .journal_service
-        .update(&mut sess, [cmd])
+        .handle(
+            &mut sess,
+            domain::journal::command::JournalCommand::Update(cmd),
+        )
         .await
         .map_err(CommandError::from_domain)?;
 
-    let journal = state
-        .journal_repo
-        .find_one_by_id(&sess, &journal_id)
-        .await
-        .map_err(CommandError::from_shared)?
+    let journal = result
+        .entities
+        .into_iter()
+        .next()
         .ok_or_else(|| format!("journal {id} not found after update"))?;
 
     Ok(JournalResponse::from_journal(&journal))
@@ -159,7 +155,10 @@ pub async fn delete_journal(state: tauri::State<'_, AppState>, id: String) -> Re
 
     state
         .journal_service
-        .delete(&mut sess, [journal_id])
+        .handle(
+            &mut sess,
+            domain::journal::command::JournalCommand::Delete(HashSet::from([journal_id])),
+        )
         .await
         .map_err(CommandError::from_domain)?;
 

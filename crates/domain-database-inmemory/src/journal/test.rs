@@ -3,9 +3,12 @@ use std::sync::Arc;
 
 use database_inmemory::repository::InMemorySession;
 use domain::journal::JournalId;
-use domain::journal::command::{JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate};
+use domain::journal::command::{
+    JournalCommand, JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate,
+};
 use domain::journal::event::JournalEvent;
 use domain::journal::service::JournalService;
+use shared::WriteService;
 
 use super::InMemoryJournalRepository;
 
@@ -53,19 +56,19 @@ fn created_id_by_name(events: &[JournalEvent], name: &str) -> JournalId {
 async fn test_create_single_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [JournalCommandCreate {
+            JournalCommand::Create(JournalCommandCreate {
                 name: "My Ledger".to_string(),
                 description: "Personal finance".to_string(),
                 tags: HashSet::from(["finance".to_string()]),
-            }],
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 1);
-    let JournalEvent::Created(e) = &events[0] else {
+    assert_eq!(result.events.len(), 1);
+    let JournalEvent::Created(e) = &result.events[0] else {
         panic!("expected Created")
     };
     assert_eq!(e.name, "My Ledger");
@@ -78,15 +81,20 @@ async fn test_create_single_journal() -> anyhow::Result<()> {
 async fn test_create_batch_multiple_journals() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 3);
-    let names: HashSet<_> = events
+    assert_eq!(result.events.len(), 3);
+    let names: HashSet<_> = result
+        .events
         .iter()
         .filter_map(|e| match e {
             JournalEvent::Created(c) => Some(c.name.clone()),
@@ -103,10 +111,13 @@ async fn test_create_batch_multiple_journals() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_create_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    let events = service
-        .create(&mut sess, Vec::<JournalCommandCreate>::new())
+    let result = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch::default()),
+        )
         .await?;
-    assert!(events.is_empty());
+    assert!(result.events.is_empty());
     Ok(())
 }
 
@@ -115,7 +126,7 @@ async fn test_create_empty_name_fails() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
     let err = service
-        .create(&mut sess, [create_cmd("")])
+        .handle(&mut sess, JournalCommand::Create(create_cmd("")))
         .await
         .unwrap_err();
     assert_eq!(
@@ -131,7 +142,14 @@ async fn test_create_duplicate_names_within_batch_fails() -> anyhow::Result<()> 
     let (service, mut sess) = new_service();
 
     let err = service
-        .create(&mut sess, [create_cmd("Ledger"), create_cmd("Ledger")])
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Ledger"), create_cmd("Ledger")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await
         .unwrap_err();
 
@@ -149,10 +167,12 @@ async fn test_create_duplicate_names_within_batch_fails() -> anyhow::Result<()> 
 async fn test_create_name_conflicts_with_existing_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    service.create(&mut sess, [create_cmd("Existing")]).await?;
+    service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Existing")))
+        .await?;
 
     let err = service
-        .create(&mut sess, [create_cmd("Existing")])
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Existing")))
         .await
         .unwrap_err();
 
@@ -172,23 +192,25 @@ async fn test_create_name_conflicts_with_existing_journal() -> anyhow::Result<()
 async fn test_update_single_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Original")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Original")))
+        .await?;
+    let id = created_id(&created.events);
 
-    let events = service
-        .update(
+    let result = service
+        .handle(
             &mut sess,
-            [JournalCommandUpdate {
+            JournalCommand::Update(JournalCommandUpdate {
                 id: id.clone(),
                 name: "Renamed".to_string(),
                 description: Some("New desc".to_string()),
                 tags: Some(HashSet::from(["tag1".to_string()])),
-            }],
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 1);
-    let JournalEvent::Updated(e) = &events[0] else {
+    assert_eq!(result.events.len(), 1);
+    let JournalEvent::Updated(e) = &result.events[0] else {
         panic!("expected Updated")
     };
     assert_eq!(e.name.as_deref(), Some("Renamed"));
@@ -201,22 +223,24 @@ async fn test_update_single_journal() -> anyhow::Result<()> {
 async fn test_update_empty_name_keeps_existing() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("KeepMe")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("KeepMe")))
+        .await?;
+    let id = created_id(&created.events);
 
-    let events = service
-        .update(
+    let result = service
+        .handle(
             &mut sess,
-            [JournalCommandUpdate {
+            JournalCommand::Update(JournalCommandUpdate {
                 id,
                 name: String::new(),
                 description: Some("Updated desc".to_string()),
                 tags: None,
-            }],
+            }),
         )
         .await?;
 
-    let JournalEvent::Updated(e) = &events[0] else {
+    let JournalEvent::Updated(e) = &result.events[0] else {
         panic!("expected Updated")
     };
     assert_eq!(e.name.as_deref(), Some("KeepMe"));
@@ -230,30 +254,30 @@ async fn test_update_none_fields_keep_existing() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
     let created = service
-        .create(
+        .handle(
             &mut sess,
-            [JournalCommandCreate {
+            JournalCommand::Create(JournalCommandCreate {
                 name: "Journal".to_string(),
                 description: "Original desc".to_string(),
                 tags: HashSet::from(["original".to_string()]),
-            }],
+            }),
         )
         .await?;
-    let id = created_id(&created);
+    let id = created_id(&created.events);
 
-    let events = service
-        .update(
+    let result = service
+        .handle(
             &mut sess,
-            [JournalCommandUpdate {
+            JournalCommand::Update(JournalCommandUpdate {
                 id,
                 name: "Journal".to_string(),
                 description: None,
                 tags: None,
-            }],
+            }),
         )
         .await?;
 
-    let JournalEvent::Updated(e) = &events[0] else {
+    let JournalEvent::Updated(e) = &result.events[0] else {
         panic!("expected Updated")
     };
     assert_eq!(e.description.as_deref(), Some("Original desc"));
@@ -266,14 +290,14 @@ async fn test_update_nonexistent_id_fails() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
     let err = service
-        .update(
+        .handle(
             &mut sess,
-            [JournalCommandUpdate {
+            JournalCommand::Update(JournalCommandUpdate {
                 id: JournalId::from("nonexistent"),
                 name: "Whatever".to_string(),
                 description: None,
                 tags: None,
-            }],
+            }),
         )
         .await
         .unwrap_err();
@@ -290,26 +314,32 @@ async fn test_update_nonexistent_id_fails() -> anyhow::Result<()> {
 async fn test_update_duplicate_ids_in_batch_fails() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Journal")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Journal")))
+        .await?;
+    let id = created_id(&created.events);
 
     let err = service
-        .update(
+        .handle(
             &mut sess,
-            [
-                JournalCommandUpdate {
-                    id: id.clone(),
-                    name: "Name1".to_string(),
-                    description: None,
-                    tags: None,
-                },
-                JournalCommandUpdate {
-                    id,
-                    name: "Name2".to_string(),
-                    description: None,
-                    tags: None,
-                },
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![],
+                update: vec![
+                    JournalCommandUpdate {
+                        id: id.clone(),
+                        name: "Name1".to_string(),
+                        description: None,
+                        tags: None,
+                    },
+                    JournalCommandUpdate {
+                        id,
+                        name: "Name2".to_string(),
+                        description: None,
+                        tags: None,
+                    },
+                ],
+                delete: HashSet::new(),
+            }),
         )
         .await
         .unwrap_err();
@@ -328,29 +358,40 @@ async fn test_update_duplicate_ids_in_batch_fails() -> anyhow::Result<()> {
 async fn test_update_duplicate_new_names_in_batch_fails() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(&mut sess, [create_cmd("A"), create_cmd("B")])
+    let result = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("A"), create_cmd("B")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await?;
-    let id_a = created_id_by_name(&events, "A");
-    let id_b = created_id_by_name(&events, "B");
+    let id_a = created_id_by_name(&result.events, "A");
+    let id_b = created_id_by_name(&result.events, "B");
 
     let err = service
-        .update(
+        .handle(
             &mut sess,
-            [
-                JournalCommandUpdate {
-                    id: id_a,
-                    name: "Same".to_string(),
-                    description: None,
-                    tags: None,
-                },
-                JournalCommandUpdate {
-                    id: id_b,
-                    name: "Same".to_string(),
-                    description: None,
-                    tags: None,
-                },
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![],
+                update: vec![
+                    JournalCommandUpdate {
+                        id: id_a,
+                        name: "Same".to_string(),
+                        description: None,
+                        tags: None,
+                    },
+                    JournalCommandUpdate {
+                        id: id_b,
+                        name: "Same".to_string(),
+                        description: None,
+                        tags: None,
+                    },
+                ],
+                delete: HashSet::new(),
+            }),
         )
         .await
         .unwrap_err();
@@ -369,20 +410,27 @@ async fn test_update_duplicate_new_names_in_batch_fails() -> anyhow::Result<()> 
 async fn test_update_name_conflicts_with_journal_not_in_batch() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(&mut sess, [create_cmd("Existing"), create_cmd("ToUpdate")])
+    let result = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Existing"), create_cmd("ToUpdate")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await?;
-    let to_update_id = created_id_by_name(&events, "ToUpdate");
+    let to_update_id = created_id_by_name(&result.events, "ToUpdate");
 
     let err = service
-        .update(
+        .handle(
             &mut sess,
-            [JournalCommandUpdate {
+            JournalCommand::Update(JournalCommandUpdate {
                 id: to_update_id,
                 name: "Existing".to_string(),
                 description: None,
                 tags: None,
-            }],
+            }),
         )
         .await
         .unwrap_err();
@@ -402,39 +450,52 @@ async fn test_update_name_swap_is_allowed() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
     let created = service
-        .create(&mut sess, [create_cmd("Alpha"), create_cmd("Beta")])
-        .await?;
-    let alpha_id = created_id_by_name(&created, "Alpha");
-    let beta_id = created_id_by_name(&created, "Beta");
-
-    let events = service
-        .update(
+        .handle(
             &mut sess,
-            [
-                JournalCommandUpdate {
-                    id: alpha_id.clone(),
-                    name: "Beta".to_string(),
-                    description: None,
-                    tags: None,
-                },
-                JournalCommandUpdate {
-                    id: beta_id.clone(),
-                    name: "Alpha".to_string(),
-                    description: None,
-                    tags: None,
-                },
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Alpha"), create_cmd("Beta")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
+        .await?;
+    let alpha_id = created_id_by_name(&created.events, "Alpha");
+    let beta_id = created_id_by_name(&created.events, "Beta");
+
+    let result = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![],
+                update: vec![
+                    JournalCommandUpdate {
+                        id: alpha_id.clone(),
+                        name: "Beta".to_string(),
+                        description: None,
+                        tags: None,
+                    },
+                    JournalCommandUpdate {
+                        id: beta_id.clone(),
+                        name: "Alpha".to_string(),
+                        description: None,
+                        tags: None,
+                    },
+                ],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
-    let alpha_event = events
+    let alpha_event = result
+        .events
         .iter()
         .find_map(|e| match e {
             JournalEvent::Updated(u) if u.id == alpha_id => Some(u),
             _ => None,
         })
         .expect("no Updated event for alpha");
-    let beta_event = events
+    let beta_event = result
+        .events
         .iter()
         .find_map(|e| match e {
             JournalEvent::Updated(u) if u.id == beta_id => Some(u),
@@ -451,22 +512,24 @@ async fn test_update_name_swap_is_allowed() -> anyhow::Result<()> {
 async fn test_update_rename_to_own_name_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Unchanged")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Unchanged")))
+        .await?;
+    let id = created_id(&created.events);
 
-    let events = service
-        .update(
+    let result = service
+        .handle(
             &mut sess,
-            [JournalCommandUpdate {
+            JournalCommand::Update(JournalCommandUpdate {
                 id,
                 name: "Unchanged".to_string(),
                 description: Some("New desc".to_string()),
                 tags: None,
-            }],
+            }),
         )
         .await?;
 
-    let JournalEvent::Updated(e) = &events[0] else {
+    let JournalEvent::Updated(e) = &result.events[0] else {
         panic!("expected Updated")
     };
     assert_eq!(e.name.as_deref(), Some("Unchanged"));
@@ -478,10 +541,13 @@ async fn test_update_rename_to_own_name_succeeds() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_update_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    let events = service
-        .update(&mut sess, Vec::<JournalCommandUpdate>::new())
+    let result = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch::default()),
+        )
         .await?;
-    assert!(events.is_empty());
+    assert!(result.events.is_empty());
     Ok(())
 }
 
@@ -491,13 +557,19 @@ async fn test_update_empty_batch_succeeds() -> anyhow::Result<()> {
 async fn test_delete_single_journal() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("ToDelete")))
+        .await?;
+    let id = created_id(&created.events);
 
-    service.delete(&mut sess, [id]).await?;
+    service
+        .handle(&mut sess, JournalCommand::Delete(HashSet::from([id])))
+        .await?;
 
-    let recreated = service.create(&mut sess, [create_cmd("ToDelete")]).await?;
-    assert_eq!(recreated.len(), 1);
+    let recreated = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("ToDelete")))
+        .await?;
+    assert_eq!(recreated.events.len(), 1);
 
     Ok(())
 }
@@ -506,21 +578,28 @@ async fn test_delete_single_journal() -> anyhow::Result<()> {
 async fn test_delete_batch_multiple_journals() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [create_cmd("A"), create_cmd("B"), create_cmd("C")],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("A"), create_cmd("B"), create_cmd("C")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
-    let ids: Vec<_> = events
+    let ids: HashSet<_> = result
+        .events
         .iter()
         .filter_map(|e| match e {
             JournalEvent::Created(c) => Some(c.id.clone()),
             _ => None,
         })
         .collect();
-    service.delete(&mut sess, ids).await?;
+    service
+        .handle(&mut sess, JournalCommand::Delete(ids))
+        .await?;
 
     Ok(())
 }
@@ -528,7 +607,9 @@ async fn test_delete_batch_multiple_journals() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_delete_empty_batch_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
-    service.delete(&mut sess, Vec::<JournalId>::new()).await?;
+    service
+        .handle(&mut sess, JournalCommand::Delete(HashSet::new()))
+        .await?;
     Ok(())
 }
 
@@ -536,7 +617,10 @@ async fn test_delete_empty_batch_succeeds() -> anyhow::Result<()> {
 async fn test_delete_nonexistent_id_is_silently_ignored() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     service
-        .delete(&mut sess, [JournalId::from("nonexistent")])
+        .handle(
+            &mut sess,
+            JournalCommand::Delete(HashSet::from([JournalId::from("nonexistent")])),
+        )
         .await?;
     Ok(())
 }
@@ -545,10 +629,14 @@ async fn test_delete_nonexistent_id_is_silently_ignored() -> anyhow::Result<()> 
 async fn test_delete_duplicate_ids_are_deduplicated() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Journal")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Journal")))
+        .await?;
+    let id = created_id(&created.events);
 
-    service.delete(&mut sess, [id.clone(), id]).await?;
+    service
+        .handle(&mut sess, JournalCommand::Delete(HashSet::from([id])))
+        .await?;
 
     Ok(())
 }
@@ -557,11 +645,16 @@ async fn test_delete_duplicate_ids_are_deduplicated() -> anyhow::Result<()> {
 async fn test_delete_mixed_existing_and_nonexistent_ids() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Exists")]).await?;
-    let existing_id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Exists")))
+        .await?;
+    let existing_id = created_id(&created.events);
 
     service
-        .delete(&mut sess, [existing_id.clone(), JournalId::from("fake")])
+        .handle(
+            &mut sess,
+            JournalCommand::Delete(HashSet::from([existing_id, JournalId::from("fake")])),
+        )
         .await?;
 
     Ok(())
@@ -573,9 +666,12 @@ async fn test_delete_mixed_existing_and_nonexistent_ids() -> anyhow::Result<()> 
 async fn test_batch_empty_succeeds() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let result = service
-        .batch(&mut sess, JournalCommandBatch::default())
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch::default()),
+        )
         .await?;
-    assert!(result.is_empty());
+    assert!(result.events.is_empty());
     Ok(())
 }
 
@@ -583,16 +679,23 @@ async fn test_batch_empty_succeeds() -> anyhow::Result<()> {
 async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(&mut sess, [create_cmd("ToDelete"), create_cmd("ToUpdate")])
+    let setup = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("ToDelete"), create_cmd("ToUpdate")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await?;
-    let to_delete_id = created_id_by_name(&events, "ToDelete");
-    let to_update_id = created_id_by_name(&events, "ToUpdate");
+    let to_delete_id = created_id_by_name(&setup.events, "ToDelete");
+    let to_update_id = created_id_by_name(&setup.events, "ToUpdate");
 
     let result = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::from([to_delete_id]),
                 create: vec![create_cmd("NewJournal")],
                 update: vec![JournalCommandUpdate {
@@ -601,18 +704,20 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
                     description: None,
                     tags: None,
                 }],
-            },
+            }),
         )
         .await?;
 
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.events.len(), 3);
     assert!(
         result
+            .events
             .iter()
             .any(|e| matches!(e, JournalEvent::Created(c) if c.name == "NewJournal"))
     );
     assert!(
         result
+            .events
             .iter()
             .any(|e| matches!(e, JournalEvent::Updated(u) if u.name.as_deref() == Some("Updated")))
     );
@@ -624,23 +729,26 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
 async fn test_batch_delete_frees_name_for_create() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Reusable")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Reusable")))
+        .await?;
+    let id = created_id(&created.events);
 
     let result = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::from([id]),
                 create: vec![create_cmd("Reusable")],
                 update: vec![],
-            },
+            }),
         )
         .await?;
 
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.events.len(), 2);
     assert!(
         result
+            .events
             .iter()
             .any(|e| matches!(e, JournalEvent::Created(c) if c.name == "Reusable"))
     );
@@ -652,16 +760,23 @@ async fn test_batch_delete_frees_name_for_create() -> anyhow::Result<()> {
 async fn test_batch_delete_frees_name_for_update() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let events = service
-        .create(&mut sess, [create_cmd("TakenName"), create_cmd("ToRename")])
+    let setup = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("TakenName"), create_cmd("ToRename")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await?;
-    let taken_id = created_id_by_name(&events, "TakenName");
-    let rename_id = created_id_by_name(&events, "ToRename");
+    let taken_id = created_id_by_name(&setup.events, "TakenName");
+    let rename_id = created_id_by_name(&setup.events, "ToRename");
 
     let result = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::from([taken_id]),
                 create: vec![],
                 update: vec![JournalCommandUpdate {
@@ -670,13 +785,13 @@ async fn test_batch_delete_frees_name_for_update() -> anyhow::Result<()> {
                     description: None,
                     tags: None,
                 }],
-            },
+            }),
         )
         .await?;
 
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.events.len(), 2);
     assert!(
-        result.iter().any(
+        result.events.iter().any(
             |e| matches!(e, JournalEvent::Updated(u) if u.name.as_deref() == Some("TakenName"))
         )
     );
@@ -688,13 +803,15 @@ async fn test_batch_delete_frees_name_for_update() -> anyhow::Result<()> {
 async fn test_batch_create_name_conflicts_with_update_name() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let created = service.create(&mut sess, [create_cmd("Existing")]).await?;
-    let id = created_id(&created);
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Existing")))
+        .await?;
+    let id = created_id(&created.events);
 
     let err = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::new(),
                 create: vec![create_cmd("Clash")],
                 update: vec![JournalCommandUpdate {
@@ -703,7 +820,7 @@ async fn test_batch_create_name_conflicts_with_update_name() -> anyhow::Result<(
                     description: None,
                     tags: None,
                 }],
-            },
+            }),
         )
         .await
         .unwrap_err();
@@ -722,13 +839,15 @@ async fn test_batch_create_name_conflicts_with_update_name() -> anyhow::Result<(
 async fn test_batch_result_deduplicates_by_id() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
-    let existing = service.create(&mut sess, [create_cmd("Pre")]).await?;
-    let id = created_id(&existing);
+    let existing = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Pre")))
+        .await?;
+    let id = created_id(&existing.events);
 
     let result = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::new(),
                 create: vec![create_cmd("New")],
                 update: vec![JournalCommandUpdate {
@@ -737,18 +856,19 @@ async fn test_batch_result_deduplicates_by_id() -> anyhow::Result<()> {
                     description: None,
                     tags: None,
                 }],
-            },
+            }),
         )
         .await?;
 
-    assert_eq!(result.len(), 2);
+    assert_eq!(result.events.len(), 2);
     assert!(
         result
+            .events
             .iter()
             .any(|e| matches!(e, JournalEvent::Created(c) if c.name == "New"))
     );
     assert!(
-        result.iter().any(
+        result.events.iter().any(
             |e| matches!(e, JournalEvent::Updated(u) if u.name.as_deref() == Some("PreUpdated"))
         )
     );
@@ -761,24 +881,26 @@ async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
     let created = service
-        .create(&mut sess, [create_cmd("WillSurvive")])
+        .handle(&mut sess, JournalCommand::Create(create_cmd("WillSurvive")))
         .await?;
-    let id = created_id(&created);
+    let id = created_id(&created.events);
 
     let result = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::from([id.clone()]),
                 create: vec![create_cmd("Dup"), create_cmd("Dup")],
                 update: vec![],
-            },
+            }),
         )
         .await;
 
     assert!(result.is_err());
 
-    let found = service.create(&mut sess, [create_cmd("WillSurvive")]).await;
+    let found = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("WillSurvive")))
+        .await;
     assert!(
         found.is_err(),
         "WillSurvive should still exist (rollback worked)"
@@ -792,13 +914,20 @@ async fn test_batch_rollback_on_update_failure() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
 
     service
-        .create(&mut sess, [create_cmd("A"), create_cmd("B")])
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("A"), create_cmd("B")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await?;
 
     let result = service
-        .batch(
+        .handle(
             &mut sess,
-            JournalCommandBatch {
+            JournalCommand::Batch(JournalCommandBatch {
                 delete: HashSet::new(),
                 create: vec![create_cmd("New")],
                 update: vec![JournalCommandUpdate {
@@ -807,18 +936,28 @@ async fn test_batch_rollback_on_update_failure() -> anyhow::Result<()> {
                     description: None,
                     tags: None,
                 }],
-            },
+            }),
         )
         .await;
 
     assert!(result.is_err());
 
-    let created = service.create(&mut sess, [create_cmd("New")]).await?;
-    assert_eq!(created.len(), 1, "New should not exist (rollback worked)");
+    let created = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("New")))
+        .await?;
+    assert_eq!(
+        created.events.len(),
+        1,
+        "New should not exist (rollback worked)"
+    );
 
-    let err = service.create(&mut sess, [create_cmd("A")]).await;
+    let err = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("A")))
+        .await;
     assert!(err.is_err(), "A should still exist");
-    let err = service.create(&mut sess, [create_cmd("B")]).await;
+    let err = service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("B")))
+        .await;
     assert!(err.is_err(), "B should still exist");
 
     Ok(())
@@ -834,10 +973,17 @@ async fn test_spec_find_by_id() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let repo = InMemoryJournalRepository;
 
-    let events = service
-        .create(&mut sess, [create_cmd("Alpha"), create_cmd("Beta")])
+    let result = service
+        .handle(
+            &mut sess,
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Alpha"), create_cmd("Beta")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
+        )
         .await?;
-    let alpha_id = created_id_by_name(&events, "Alpha");
+    let alpha_id = created_id_by_name(&result.events, "Alpha");
 
     let found = repo
         .find_all(&sess, &JournalSpecification::id(alpha_id.clone()), None)
@@ -854,9 +1000,13 @@ async fn test_spec_find_by_name() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -881,21 +1031,25 @@ async fn test_spec_find_by_tag() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                JournalCommandCreate {
-                    name: "Personal".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["finance".to_string(), "personal".to_string()]),
-                },
-                JournalCommandCreate {
-                    name: "Business".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["finance".to_string(), "business".to_string()]),
-                },
-                create_cmd("NoTags"),
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![
+                    JournalCommandCreate {
+                        name: "Personal".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["finance".to_string(), "personal".to_string()]),
+                    },
+                    JournalCommandCreate {
+                        name: "Business".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["finance".to_string(), "business".to_string()]),
+                    },
+                    create_cmd("NoTags"),
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -920,21 +1074,25 @@ async fn test_spec_find_by_full_text() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                JournalCommandCreate {
-                    name: "My Ledger".to_string(),
-                    description: "Tracks personal spending".to_string(),
-                    tags: HashSet::new(),
-                },
-                JournalCommandCreate {
-                    name: "Work".to_string(),
-                    description: "Business expenses".to_string(),
-                    tags: HashSet::from(["spending".to_string()]),
-                },
-                create_cmd("Empty"),
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![
+                    JournalCommandCreate {
+                        name: "My Ledger".to_string(),
+                        description: "Tracks personal spending".to_string(),
+                        tags: HashSet::new(),
+                    },
+                    JournalCommandCreate {
+                        name: "Work".to_string(),
+                        description: "Business expenses".to_string(),
+                        tags: HashSet::from(["spending".to_string()]),
+                    },
+                    create_cmd("Empty"),
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -964,7 +1122,9 @@ async fn test_spec_no_match_returns_empty() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let repo = InMemoryJournalRepository;
 
-    service.create(&mut sess, [create_cmd("Alpha")]).await?;
+    service
+        .handle(&mut sess, JournalCommand::Create(create_cmd("Alpha")))
+        .await?;
 
     let found = repo
         .find_all(&sess, &JournalSpecification::name("Nonexistent"), None)
@@ -979,25 +1139,29 @@ async fn test_spec_all_and() -> anyhow::Result<()> {
     let (service, mut sess) = new_service();
     let repo = InMemoryJournalRepository;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [
-                JournalCommandCreate {
-                    name: "Alpha".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["tag1".to_string()]),
-                },
-                JournalCommandCreate {
-                    name: "Beta".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["tag1".to_string()]),
-                },
-                create_cmd("Gamma"),
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![
+                    JournalCommandCreate {
+                        name: "Alpha".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["tag1".to_string()]),
+                    },
+                    JournalCommandCreate {
+                        name: "Beta".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["tag1".to_string()]),
+                    },
+                    create_cmd("Gamma"),
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
-    let alpha_id = created_id_by_name(&events, "Alpha");
+    let alpha_id = created_id_by_name(&result.events, "Alpha");
 
     // AND: match by tag AND id -- only Alpha has both
     let spec = JournalSpecification::tag("tag1") & JournalSpecification::id(alpha_id.clone());
@@ -1014,9 +1178,13 @@ async fn test_spec_any_or() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1037,9 +1205,13 @@ async fn test_spec_not() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![create_cmd("Alpha"), create_cmd("Beta"), create_cmd("Gamma")],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1060,25 +1232,29 @@ async fn test_spec_nested_combination() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                JournalCommandCreate {
-                    name: "Alpha".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["a".to_string()]),
-                },
-                JournalCommandCreate {
-                    name: "Beta".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["b".to_string()]),
-                },
-                JournalCommandCreate {
-                    name: "Gamma".to_string(),
-                    description: String::new(),
-                    tags: HashSet::from(["a".to_string()]),
-                },
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![
+                    JournalCommandCreate {
+                        name: "Alpha".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["a".to_string()]),
+                    },
+                    JournalCommandCreate {
+                        name: "Beta".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["b".to_string()]),
+                    },
+                    JournalCommandCreate {
+                        name: "Gamma".to_string(),
+                        description: String::new(),
+                        tags: HashSet::from(["a".to_string()]),
+                    },
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1100,14 +1276,18 @@ async fn test_spec_limit() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                create_cmd("A"),
-                create_cmd("B"),
-                create_cmd("C"),
-                create_cmd("D"),
-            ],
+            JournalCommand::Batch(JournalCommandBatch {
+                create: vec![
+                    create_cmd("A"),
+                    create_cmd("B"),
+                    create_cmd("C"),
+                    create_cmd("D"),
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1127,7 +1307,10 @@ async fn test_spec_find_by_name_case_insensitive() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(&mut sess, [create_cmd("Personal Ledger")])
+        .handle(
+            &mut sess,
+            JournalCommand::Create(create_cmd("Personal Ledger")),
+        )
         .await?;
 
     let found = repo
@@ -1149,13 +1332,13 @@ async fn test_spec_find_by_tag_case_insensitive() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [JournalCommandCreate {
+            JournalCommand::Create(JournalCommandCreate {
                 name: "Tagged".to_string(),
                 description: String::new(),
                 tags: HashSet::from(["Finance".to_string()]),
-            }],
+            }),
         )
         .await?;
 
@@ -1178,13 +1361,13 @@ async fn test_spec_find_by_full_text_case_insensitive() -> anyhow::Result<()> {
     let repo = InMemoryJournalRepository;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [JournalCommandCreate {
+            JournalCommand::Create(JournalCommandCreate {
                 name: "Investment Portfolio".to_string(),
                 description: "Tracks Stock Holdings".to_string(),
                 tags: HashSet::new(),
-            }],
+            }),
         )
         .await?;
 

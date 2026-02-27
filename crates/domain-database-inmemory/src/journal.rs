@@ -6,7 +6,7 @@ use database_inmemory::repository::{
     InMemoryReadRepository, InMemorySession, InMemoryWriteRepository,
 };
 use domain::journal::repository::JournalRepository;
-use domain::journal::specification::{JournalSpec, JournalSpecification};
+use domain::journal::specification::JournalSpec;
 use domain::journal::{Journal, JournalId};
 use shared::{Id, Persistence, ReadRepository, Result, WriteRepository};
 use std::collections::{HashMap, HashSet};
@@ -46,37 +46,15 @@ impl Persistence for JournalPo {
 #[derive(Default)]
 pub struct InMemoryJournalRepository;
 
-impl InMemoryJournalRepository {
-    fn satisfies_leaf(&self, po: &JournalPo, spec: &JournalSpecification) -> bool {
-        match spec {
-            JournalSpecification::Id(ids) => ids.contains(&po.id),
-            JournalSpecification::Name(names) => names
-                .iter()
-                .map(|s| s.trim().to_lowercase())
-                .filter(|s| !s.is_empty())
-                .any(|s| s == po.name.to_lowercase()),
-            JournalSpecification::Tag(tags) => {
-                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
-                po.tags
-                    .iter()
-                    .any(|t| lower_tags.contains(&t.to_lowercase()))
-            }
-            JournalSpecification::FullText(query) => {
-                let query = query.trim().to_lowercase();
-                po.name.to_lowercase().contains(&query)
-                    || po.description.to_lowercase().contains(&query)
-                    || po.tags.iter().any(|t| t.to_lowercase().contains(&query))
-            }
-        }
-    }
-}
+impl InMemoryJournalRepository {}
 
 #[async_trait::async_trait]
 impl InMemoryReadRepository<JournalSpec> for InMemoryJournalRepository {
     type Persistence = JournalPo;
 
     fn satisfies(&self, po: &JournalPo, spec: &JournalSpec) -> bool {
-        spec.evaluate(&|leaf| self.satisfies_leaf(po, leaf))
+        let entity = self.convert_to_entity(po.clone());
+        spec.matches(&entity)
     }
 
     fn convert_to_entity(&self, po: JournalPo) -> Journal {

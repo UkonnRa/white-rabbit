@@ -9,6 +9,7 @@ mod repository;
 mod service;
 mod specification;
 mod r#type;
+mod uow;
 
 pub use aggregate::AggregateRoot;
 pub use command::Command;
@@ -20,7 +21,8 @@ pub use event::DomainEvent;
 pub use id::{EntityId, Id};
 pub use persistence::Persistence;
 pub use repository::{ReadRepository, RepositorySession, WriteRepository};
-pub use service::WriteService;
+pub use service::{HandleResult, WriteService};
 pub use shared_derive::DomainModel;
-pub use specification::{Specification, SpecificationExpression};
+pub use specification::{Specification, SpecificationEvaluator, SpecificationExpression};
 pub use r#type::{NonEmpty, NonNegative};
+pub use uow::{EntityChangeSet, UnitOfWork};

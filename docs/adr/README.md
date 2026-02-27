@@ -20,3 +20,4 @@ This directory stores Architecture Decision Records (ADRs).
 - `0002-event-sourcing-dual-write-persistence.md`
 - `0003-in-memory-event-bus-routing.md`
 - `0004-transaction-boundaries-long-running-processes.md`
+- `0005-unit-of-work-write-service-split.md`

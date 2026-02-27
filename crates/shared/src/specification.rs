@@ -1,11 +1,22 @@
 use std::fmt::Debug;
 use std::ops::{BitAnd, BitOr, Not};
 
+use crate::entity::Entity;
+
 #[cfg(test)]
 mod test;
 
 /// Marker trait for domain specification enums (leaf predicates).
 pub trait Specification: Send + Sync + Debug {}
+
+/// Evaluates a leaf specification against an in-memory entity.
+///
+/// Implementations live in the domain crate alongside each specification enum.
+/// Used by [`UnitOfWork`](crate::UnitOfWork) overlay queries and in-memory
+/// test repositories.
+pub trait SpecificationEvaluator<E: Entity> {
+    fn matches(&self, entity: &E) -> bool;
+}
 
 /// A composable expression tree wrapping a [`Specification`].
 ///
@@ -31,6 +42,14 @@ impl<S: Specification> SpecificationExpression<S> {
             Self::Any(specs) => specs.iter().any(|s| s.evaluate(leaf_fn)),
             Self::Not(s) => !s.evaluate(leaf_fn),
         }
+    }
+
+    /// Test whether an in-memory entity satisfies this specification expression.
+    pub fn matches<E: Entity>(&self, entity: &E) -> bool
+    where
+        S: SpecificationEvaluator<E>,
+    {
+        self.evaluate(&|leaf| leaf.matches(entity))
     }
 }
 

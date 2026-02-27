@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
-use shared::{Specification, SpecificationExpression};
+use shared::{Specification, SpecificationEvaluator, SpecificationExpression};
 
-use crate::account::{AccountId, AccountType};
+use crate::account::{Account, AccountId, AccountType};
 use crate::journal::JournalId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +20,46 @@ pub enum AccountSpecification {
 }
 
 impl Specification for AccountSpecification {}
+
+impl SpecificationEvaluator<Account> for AccountSpecification {
+    fn matches(&self, a: &Account) -> bool {
+        match self {
+            Self::Id(ids) => ids.contains(&a.id),
+            Self::JournalId(ids) => ids.contains(&a.journal_id),
+            Self::ParentId(ids) => a.parent_id.as_ref().is_some_and(|pid| ids.contains(pid)),
+            Self::Name(names) => {
+                let name = a.name.to_string().to_lowercase();
+                names
+                    .iter()
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .any(|s| s == name)
+            }
+            Self::Type(types) => types.contains(&a.r#type),
+            Self::Tag(tags) => {
+                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
+                a.tags
+                    .iter()
+                    .any(|t| lower_tags.contains(&t.to_string().to_lowercase()))
+            }
+            Self::FullText(query) => {
+                let q = query.trim().to_lowercase();
+                a.name.to_string().to_lowercase().contains(&q)
+                    || a.description.to_lowercase().contains(&q)
+                    || a.tags
+                        .iter()
+                        .any(|t| t.to_string().to_lowercase().contains(&q))
+            }
+            Self::Archived(archived) => {
+                if *archived {
+                    a.archived_at.is_some()
+                } else {
+                    a.archived_at.is_none()
+                }
+            }
+        }
+    }
+}
 
 /// Composable account specification expression.
 pub type AccountSpec = SpecificationExpression<AccountSpecification>;

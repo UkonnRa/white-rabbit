@@ -7,11 +7,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 use database_inmemory::repository::{
     InMemoryReadRepository, InMemorySession, InMemoryWriteRepository,
 };
-use domain::account::AccountId;
 use domain::journal::JournalId;
 use domain::record::repository::RecordRepository;
-use domain::record::specification::{RecordSpec, RecordSpecification};
-use domain::record::{Record, RecordId, RecordItemKind, RecordItems};
+use domain::record::specification::RecordSpec;
+use domain::record::{Record, RecordId, RecordItems};
 use shared::{Id, Persistence, ReadRepository, Result, WriteRepository};
 
 // ── Persistence Object ───────────────────────────────────────────
@@ -46,66 +45,20 @@ impl Persistence for RecordPo {
     }
 }
 
-impl RecordPo {
-    fn kind(&self) -> RecordItemKind {
-        match &self.items {
-            RecordItems::Transactions(_) => RecordItemKind::Transaction,
-            RecordItems::Validations(_) => RecordItemKind::Validation,
-        }
-    }
-
-    fn account_ids(&self) -> HashSet<AccountId> {
-        match &self.items {
-            RecordItems::Transactions(txns) => txns.iter().map(|t| t.account_id.clone()).collect(),
-            RecordItems::Validations(vals) => vals.iter().map(|v| v.account_id.clone()).collect(),
-        }
-    }
-}
-
 // ── Stateless Repository ─────────────────────────────────────────
 
 #[derive(Default)]
 pub struct InMemoryRecordRepository;
 
-impl InMemoryRecordRepository {
-    fn satisfies_leaf(&self, po: &RecordPo, spec: &RecordSpecification) -> bool {
-        match spec {
-            RecordSpecification::Id(ids) => ids.contains(&po.id),
-            RecordSpecification::JournalId(ids) => ids.contains(&po.journal_id),
-            RecordSpecification::AccountId(ids) => {
-                let record_account_ids = po.account_ids();
-                ids.iter().any(|id| record_account_ids.contains(id))
-            }
-            RecordSpecification::Date(dates) => dates.contains(&po.date),
-            RecordSpecification::DateFrom(date) => po.date >= *date,
-            RecordSpecification::DateTo(date) => po.date <= *date,
-            RecordSpecification::Payee(payees) => {
-                let lower_payee = po.payee.to_lowercase();
-                payees.iter().any(|p| p.to_lowercase() == lower_payee)
-            }
-            RecordSpecification::Tag(tags) => {
-                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
-                po.tags
-                    .iter()
-                    .any(|t| lower_tags.contains(&t.to_lowercase()))
-            }
-            RecordSpecification::ItemKind(kind) => po.kind() == *kind,
-            RecordSpecification::FullText(query) => {
-                let query = query.trim().to_lowercase();
-                po.description.to_lowercase().contains(&query)
-                    || po.payee.to_lowercase().contains(&query)
-                    || po.tags.iter().any(|t| t.to_lowercase().contains(&query))
-            }
-        }
-    }
-}
+impl InMemoryRecordRepository {}
 
 #[async_trait::async_trait]
 impl InMemoryReadRepository<RecordSpec> for InMemoryRecordRepository {
     type Persistence = RecordPo;
 
     fn satisfies(&self, po: &RecordPo, spec: &RecordSpec) -> bool {
-        spec.evaluate(&|leaf| self.satisfies_leaf(po, leaf))
+        let entity = self.convert_to_entity(po.clone());
+        spec.matches(&entity)
     }
 
     fn convert_to_entity(&self, po: RecordPo) -> Record {

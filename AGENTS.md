@@ -44,6 +44,10 @@
   external I/O.
 - Long-held database transactions are prohibited; external I/O
   must occur outside transaction boundaries.
+- Write-path UoW queries must be single-aggregate-type;
+  cross-aggregate resolution is decomposed at the service level.
+- `do_handle` must be side-effect-free (no persistence writes);
+  `handle` orchestrates persistence and returns entities + events.
 
 ## Error Design Constraints
 

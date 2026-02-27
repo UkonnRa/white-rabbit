@@ -5,17 +5,18 @@ use database_seaorm::repository::SeaOrmSession;
 use sea_orm::Database;
 
 use database_seaorm_migration::{Migrator, MigratorTrait};
-use domain::account::command::AccountCommandCreate;
+use domain::account::command::{AccountCommand, AccountCommandCreate};
 use domain::account::event::AccountEvent;
 use domain::account::service::AccountService;
 use domain::account::{AccountId, AccountType};
 use domain::journal::JournalId;
 use domain::record::command::{
-    RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
+    RecordCommand, RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
 };
 use domain::record::event::RecordEvent;
 use domain::record::service::RecordService;
 use domain::record::{RecordId, RecordItemKind, RecordItems};
+use shared::WriteService;
 
 use crate::account::SeaOrmAccountRepository;
 use crate::record::SeaOrmRecordRepository;
@@ -89,36 +90,6 @@ async fn setup_accounts(sess: &mut SeaOrmSession) -> (JournalId, AccountId, Acco
         repository: Arc::new(SeaOrmAccountRepository),
     };
 
-    let events = account_service
-        .create(
-            sess,
-            [
-                AccountCommandCreate {
-                    journal_id: jid.clone(),
-                    parent_id: asset_root,
-                    name: "Cash".to_string(),
-                    description: String::new(),
-                    tags: HashSet::new(),
-                },
-                AccountCommandCreate {
-                    journal_id: jid.clone(),
-                    parent_id: expense_root,
-                    name: "Food".to_string(),
-                    description: String::new(),
-                    tags: HashSet::new(),
-                },
-                AccountCommandCreate {
-                    journal_id: jid.clone(),
-                    parent_id: equity_root,
-                    name: "Opening".to_string(),
-                    description: String::new(),
-                    tags: HashSet::new(),
-                },
-            ],
-        )
-        .await
-        .unwrap();
-
     fn find_account_created_id(events: &[AccountEvent], name: &str) -> AccountId {
         events
             .iter()
@@ -129,9 +100,50 @@ async fn setup_accounts(sess: &mut SeaOrmSession) -> (JournalId, AccountId, Acco
             .unwrap_or_else(|| panic!("no Created event with name '{name}'"))
     }
 
-    let asset_id = find_account_created_id(&events, "Cash");
-    let expense_id = find_account_created_id(&events, "Food");
-    let equity_id = find_account_created_id(&events, "Opening");
+    let r1 = account_service
+        .handle(
+            sess,
+            AccountCommand::Create(AccountCommandCreate {
+                journal_id: jid.clone(),
+                parent_id: asset_root,
+                name: "Cash".to_string(),
+                description: String::new(),
+                tags: HashSet::new(),
+            }),
+        )
+        .await
+        .unwrap();
+    let asset_id = find_account_created_id(&r1.events, "Cash");
+
+    let r2 = account_service
+        .handle(
+            sess,
+            AccountCommand::Create(AccountCommandCreate {
+                journal_id: jid.clone(),
+                parent_id: expense_root,
+                name: "Food".to_string(),
+                description: String::new(),
+                tags: HashSet::new(),
+            }),
+        )
+        .await
+        .unwrap();
+    let expense_id = find_account_created_id(&r2.events, "Food");
+
+    let r3 = account_service
+        .handle(
+            sess,
+            AccountCommand::Create(AccountCommandCreate {
+                journal_id: jid.clone(),
+                parent_id: equity_root,
+                name: "Opening".to_string(),
+                description: String::new(),
+                tags: HashSet::new(),
+            }),
+        )
+        .await
+        .unwrap();
+    let equity_id = find_account_created_id(&r3.events, "Opening");
 
     (jid, asset_id, expense_id, equity_id)
 }
@@ -175,10 +187,10 @@ async fn test_create_single_transaction_record() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [RecordCommandCreate {
+            RecordCommand::Create(RecordCommandCreate {
                 journal_id: jid.clone(),
                 date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
                 kind: RecordItemKind::Transaction,
@@ -189,12 +201,12 @@ async fn test_create_single_transaction_record() -> anyhow::Result<()> {
                 description: "Lunch".to_string(),
                 tags: HashSet::from(["food".to_string()]),
                 payee: "Restaurant".to_string(),
-            }],
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 1);
-    let c = match &events[0] {
+    assert_eq!(result.events.len(), 1);
+    let c = match &result.events[0] {
         RecordEvent::Created(c) => c,
         other => panic!("expected Created event, got {other:?}"),
     };
@@ -210,10 +222,10 @@ async fn test_create_validation_record() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, _, _) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [RecordCommandCreate {
+            RecordCommand::Create(RecordCommandCreate {
                 journal_id: jid.clone(),
                 date: chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(),
                 kind: RecordItemKind::Validation,
@@ -227,12 +239,12 @@ async fn test_create_validation_record() -> anyhow::Result<()> {
                 description: "Month-end validation".to_string(),
                 tags: HashSet::new(),
                 payee: String::new(),
-            }],
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 1);
-    let c = match &events[0] {
+    assert_eq!(result.events.len(), 1);
+    let c = match &result.events[0] {
         RecordEvent::Created(c) => c,
         other => panic!("expected Created event, got {other:?}"),
     };
@@ -247,15 +259,15 @@ async fn test_create_nonexistent_account_fails() -> anyhow::Result<()> {
     let (jid, asset_id, _, _) = setup_accounts(&mut sess).await;
 
     let err = service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "100 USD"),
                     transaction_item(&AccountId::from("nonexistent"), "100 USD"),
                 ],
-            )],
+            )),
         )
         .await
         .unwrap_err();
@@ -274,7 +286,7 @@ async fn test_create_empty_items_fails() -> anyhow::Result<()> {
     let (jid, _, _, _) = setup_accounts(&mut sess).await;
 
     let err = service
-        .create(&mut sess, [create_cmd(&jid, vec![])])
+        .handle(&mut sess, RecordCommand::Create(create_cmd(&jid, vec![])))
         .await
         .unwrap_err();
 
@@ -293,37 +305,37 @@ async fn test_update_description_and_date() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "50 USD"),
                     transaction_item(&expense_id, "50 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
-    let id = created_id(&events);
+    let id = created_id(&result.events);
 
     let new_date = chrono::NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
-    let events = service
-        .update(
+    let result = service
+        .handle(
             &mut sess,
-            [RecordCommandUpdate {
+            RecordCommand::Update(RecordCommandUpdate {
                 id: id.clone(),
                 date: Some(new_date),
                 items: None,
                 description: Some("Updated description".to_string()),
                 tags: Some(HashSet::from(["updated".to_string()])),
                 payee: Some("New Payee".to_string()),
-            }],
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 1);
-    let u = match &events[0] {
+    assert_eq!(result.events.len(), 1);
+    let u = match &result.events[0] {
         RecordEvent::Updated(u) => u,
         other => panic!("expected Updated event, got {other:?}"),
     };
@@ -339,24 +351,24 @@ async fn test_update_replace_items() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "50 USD"),
                     transaction_item(&expense_id, "50 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
-    let id = created_id(&events);
+    let id = created_id(&result.events);
 
-    let events = service
-        .update(
+    let result = service
+        .handle(
             &mut sess,
-            [RecordCommandUpdate {
+            RecordCommand::Update(RecordCommandUpdate {
                 id,
                 date: None,
                 items: Some(vec![
@@ -366,12 +378,12 @@ async fn test_update_replace_items() -> anyhow::Result<()> {
                 description: None,
                 tags: None,
                 payee: None,
-            }],
+            }),
         )
         .await?;
 
-    assert_eq!(events.len(), 1);
-    let u = match &events[0] {
+    assert_eq!(result.events.len(), 1);
+    let u = match &result.events[0] {
         RecordEvent::Updated(u) => u,
         other => panic!("expected Updated event, got {other:?}"),
     };
@@ -385,16 +397,16 @@ async fn test_update_nonexistent_record_fails() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
 
     let err = service
-        .update(
+        .handle(
             &mut sess,
-            [RecordCommandUpdate {
+            RecordCommand::Update(RecordCommandUpdate {
                 id: RecordId::from("nonexistent"),
                 date: None,
                 items: None,
                 description: Some("Whatever".to_string()),
                 tags: None,
                 payee: None,
-            }],
+            }),
         )
         .await
         .unwrap_err();
@@ -414,21 +426,23 @@ async fn test_delete_existing_record() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "100 USD"),
                     transaction_item(&expense_id, "100 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
-    let id = created_id(&events);
+    let id = created_id(&result.events);
 
-    service.delete(&mut sess, [id]).await?;
+    service
+        .handle(&mut sess, RecordCommand::Delete(HashSet::from([id])))
+        .await?;
 
     Ok(())
 }
@@ -437,7 +451,10 @@ async fn test_delete_existing_record() -> anyhow::Result<()> {
 async fn test_delete_nonexistent_is_silent() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     service
-        .delete(&mut sess, [RecordId::from("nonexistent")])
+        .handle(
+            &mut sess,
+            RecordCommand::Delete(HashSet::from([RecordId::from("nonexistent")])),
+        )
         .await?;
     Ok(())
 }
@@ -449,29 +466,34 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [
-                create_cmd(
-                    &jid,
-                    vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                ),
-                create_cmd(
-                    &jid,
-                    vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                ),
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    create_cmd(
+                        &jid,
+                        vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                    ),
+                    create_cmd(
+                        &jid,
+                        vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                    ),
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
-    let ids: Vec<RecordId> = events
+    let ids: Vec<RecordId> = result
+        .events
         .iter()
         .filter_map(|e| match e {
             RecordEvent::Created(c) => Some(c.id.clone()),
@@ -481,10 +503,10 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
     let to_delete_id = ids[0].clone();
     let to_update_id = ids[1].clone();
 
-    let events = service
-        .batch(
+    let result = service
+        .handle(
             &mut sess,
-            RecordCommandBatch {
+            RecordCommand::Batch(RecordCommandBatch {
                 delete: HashSet::from([to_delete_id]),
                 create: vec![create_cmd(
                     &jid,
@@ -501,11 +523,12 @@ async fn test_batch_delete_create_update_together() -> anyhow::Result<()> {
                     tags: None,
                     payee: None,
                 }],
-            },
+            }),
         )
         .await?;
 
-    let updated_event = events
+    let updated_event = result
+        .events
         .iter()
         .find_map(|e| match e {
             RecordEvent::Updated(u) if u.id == to_update_id => Some(u),
@@ -522,45 +545,45 @@ async fn test_batch_rollback_on_create_failure() -> anyhow::Result<()> {
     let (service, mut sess) = new_service().await;
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "50 USD"),
                     transaction_item(&expense_id, "50 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
-    let id = created_id(&events);
+    let id = created_id(&result.events);
 
-    let result = service
-        .batch(
+    let batch_result = service
+        .handle(
             &mut sess,
-            RecordCommandBatch {
+            RecordCommand::Batch(RecordCommandBatch {
                 delete: HashSet::from([id.clone()]),
                 create: vec![create_cmd(&jid, vec![])],
                 update: vec![],
-            },
+            }),
         )
         .await;
 
-    assert!(result.is_err());
+    assert!(batch_result.is_err());
 
     // The deleted record should still exist (rollback worked)
     let found = service
-        .update(
+        .handle(
             &mut sess,
-            [RecordCommandUpdate {
+            RecordCommand::Update(RecordCommandUpdate {
                 id,
                 date: None,
                 items: None,
                 description: Some("Still here".to_string()),
                 tags: None,
                 payee: None,
-            }],
+            }),
         )
         .await;
     assert!(found.is_ok(), "Record should still exist after rollback");
@@ -579,28 +602,32 @@ async fn test_spec_find_by_id() -> anyhow::Result<()> {
     let repo = SeaOrmRecordRepository;
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
-    let events = service
-        .create(
+    let result = service
+        .handle(
             &mut sess,
-            [
-                create_cmd(
-                    &jid,
-                    vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                ),
-                create_cmd(
-                    &jid,
-                    vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                ),
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    create_cmd(
+                        &jid,
+                        vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                    ),
+                    create_cmd(
+                        &jid,
+                        vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                    ),
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
-    let id0 = created_id(&events);
+    let id0 = created_id(&result.events);
 
     let found = repo
         .find_all(&sess, &RecordSpecification::id(id0.clone()), None)
@@ -618,15 +645,15 @@ async fn test_spec_find_by_journal_id() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "10 USD"),
                     transaction_item(&expense_id, "10 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
 
@@ -650,27 +677,27 @@ async fn test_spec_find_by_account_id() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, equity_id) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "10 USD"),
                     transaction_item(&expense_id, "10 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "20 USD"),
                     transaction_item(&equity_id, "20 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
 
@@ -705,21 +732,21 @@ async fn test_spec_find_by_date() -> anyhow::Result<()> {
     let feb1 = chrono::NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "10 USD"),
                     transaction_item(&expense_id, "10 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
     service
-        .create(
+        .handle(
             &mut sess,
-            [RecordCommandCreate {
+            RecordCommand::Create(RecordCommandCreate {
                 journal_id: jid.clone(),
                 date: feb1,
                 kind: RecordItemKind::Transaction,
@@ -730,7 +757,7 @@ async fn test_spec_find_by_date() -> anyhow::Result<()> {
                 description: String::new(),
                 tags: HashSet::new(),
                 payee: String::new(),
-            }],
+            }),
         )
         .await?;
 
@@ -759,9 +786,9 @@ async fn test_spec_find_by_date_range() -> anyhow::Result<()> {
 
     for date in [jan15, feb1, mar1] {
         service
-            .create(
+            .handle(
                 &mut sess,
-                [RecordCommandCreate {
+                RecordCommand::Create(RecordCommandCreate {
                     journal_id: jid.clone(),
                     date,
                     kind: RecordItemKind::Transaction,
@@ -772,7 +799,7 @@ async fn test_spec_find_by_date_range() -> anyhow::Result<()> {
                     description: String::new(),
                     tags: HashSet::new(),
                     payee: String::new(),
-                }],
+                }),
             )
             .await?;
     }
@@ -801,34 +828,38 @@ async fn test_spec_find_by_payee() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Cafe".to_string(),
-                },
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Grocery".to_string(),
-                },
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Cafe".to_string(),
+                    },
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Grocery".to_string(),
+                    },
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -847,9 +878,9 @@ async fn test_spec_find_by_tag() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [RecordCommandCreate {
+            RecordCommand::Create(RecordCommandCreate {
                 journal_id: jid.clone(),
                 date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
                 kind: RecordItemKind::Transaction,
@@ -860,19 +891,19 @@ async fn test_spec_find_by_tag() -> anyhow::Result<()> {
                 description: String::new(),
                 tags: HashSet::from(["food".to_string(), "lunch".to_string()]),
                 payee: String::new(),
-            }],
+            }),
         )
         .await?;
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "20 USD"),
                     transaction_item(&expense_id, "20 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
 
@@ -896,21 +927,21 @@ async fn test_spec_find_by_item_kind() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [create_cmd(
+            RecordCommand::Create(create_cmd(
                 &jid,
                 vec![
                     transaction_item(&asset_id, "10 USD"),
                     transaction_item(&expense_id, "10 USD"),
                 ],
-            )],
+            )),
         )
         .await?;
     service
-        .create(
+        .handle(
             &mut sess,
-            [RecordCommandCreate {
+            RecordCommand::Create(RecordCommandCreate {
                 journal_id: jid.clone(),
                 date: chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(),
                 kind: RecordItemKind::Validation,
@@ -924,7 +955,7 @@ async fn test_spec_find_by_item_kind() -> anyhow::Result<()> {
                 description: String::new(),
                 tags: HashSet::new(),
                 payee: String::new(),
-            }],
+            }),
         )
         .await?;
 
@@ -956,34 +987,38 @@ async fn test_spec_find_by_full_text() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                    description: "Lunch at the cafe".to_string(),
-                    tags: HashSet::new(),
-                    payee: "SomeCafe".to_string(),
-                },
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                    description: "Grocery shopping".to_string(),
-                    tags: HashSet::new(),
-                    payee: "Supermarket".to_string(),
-                },
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                        description: "Lunch at the cafe".to_string(),
+                        tags: HashSet::new(),
+                        payee: "SomeCafe".to_string(),
+                    },
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                        description: "Grocery shopping".to_string(),
+                        tags: HashSet::new(),
+                        payee: "Supermarket".to_string(),
+                    },
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1009,34 +1044,38 @@ async fn test_spec_all_and() -> anyhow::Result<()> {
     let jan15 = chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: jan15,
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Cafe".to_string(),
-                },
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: jan15,
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Grocery".to_string(),
-                },
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: jan15,
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Cafe".to_string(),
+                    },
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: jan15,
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Grocery".to_string(),
+                    },
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1054,46 +1093,50 @@ async fn test_spec_any_or() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Cafe".to_string(),
-                },
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Grocery".to_string(),
-                },
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "30 USD"),
-                        transaction_item(&expense_id, "30 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Restaurant".to_string(),
-                },
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Cafe".to_string(),
+                    },
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Grocery".to_string(),
+                    },
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "30 USD"),
+                            transaction_item(&expense_id, "30 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Restaurant".to_string(),
+                    },
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1111,34 +1154,38 @@ async fn test_spec_not() -> anyhow::Result<()> {
     let (jid, asset_id, expense_id, _) = setup_accounts(&mut sess).await;
 
     service
-        .create(
+        .handle(
             &mut sess,
-            [
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "10 USD"),
-                        transaction_item(&expense_id, "10 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Cafe".to_string(),
-                },
-                RecordCommandCreate {
-                    journal_id: jid.clone(),
-                    date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
-                    kind: RecordItemKind::Transaction,
-                    items: vec![
-                        transaction_item(&asset_id, "20 USD"),
-                        transaction_item(&expense_id, "20 USD"),
-                    ],
-                    description: String::new(),
-                    tags: HashSet::new(),
-                    payee: "Grocery".to_string(),
-                },
-            ],
+            RecordCommand::Batch(RecordCommandBatch {
+                create: vec![
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "10 USD"),
+                            transaction_item(&expense_id, "10 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Cafe".to_string(),
+                    },
+                    RecordCommandCreate {
+                        journal_id: jid.clone(),
+                        date: chrono::NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                        kind: RecordItemKind::Transaction,
+                        items: vec![
+                            transaction_item(&asset_id, "20 USD"),
+                            transaction_item(&expense_id, "20 USD"),
+                        ],
+                        description: String::new(),
+                        tags: HashSet::new(),
+                        payee: "Grocery".to_string(),
+                    },
+                ],
+                update: vec![],
+                delete: HashSet::new(),
+            }),
         )
         .await?;
 
@@ -1158,9 +1205,9 @@ async fn test_spec_limit() -> anyhow::Result<()> {
 
     for i in 0..5 {
         service
-            .create(
+            .handle(
                 &mut sess,
-                [RecordCommandCreate {
+                RecordCommand::Create(RecordCommandCreate {
                     journal_id: jid.clone(),
                     date: chrono::NaiveDate::from_ymd_opt(2024, 1, 15 + i).unwrap(),
                     kind: RecordItemKind::Transaction,
@@ -1171,7 +1218,7 @@ async fn test_spec_limit() -> anyhow::Result<()> {
                     description: String::new(),
                     tags: HashSet::new(),
                     payee: String::new(),
-                }],
+                }),
             )
             .await?;
     }

@@ -6,7 +6,7 @@ use database_inmemory::repository::{
     InMemoryReadRepository, InMemorySession, InMemoryWriteRepository,
 };
 use domain::account::repository::AccountRepository;
-use domain::account::specification::{AccountSpec, AccountSpecification};
+use domain::account::specification::AccountSpec;
 use domain::account::{Account, AccountId, AccountType};
 use domain::journal::JournalId;
 use shared::{Id, Persistence, ReadRepository, Result, WriteRepository};
@@ -50,49 +50,15 @@ impl Persistence for AccountPo {
 #[derive(Default)]
 pub struct InMemoryAccountRepository;
 
-impl InMemoryAccountRepository {
-    fn satisfies_leaf(&self, po: &AccountPo, spec: &AccountSpecification) -> bool {
-        match spec {
-            AccountSpecification::Id(ids) => ids.contains(&po.id),
-            AccountSpecification::JournalId(ids) => ids.contains(&po.journal_id),
-            AccountSpecification::ParentId(ids) => {
-                po.parent_id.as_ref().is_some_and(|pid| ids.contains(pid))
-            }
-            AccountSpecification::Name(names) => names
-                .iter()
-                .map(|s| s.trim().to_lowercase())
-                .filter(|s| !s.is_empty())
-                .any(|s| s == po.name.to_lowercase()),
-            AccountSpecification::Type(types) => types.contains(&po.r#type),
-            AccountSpecification::Tag(tags) => {
-                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
-                po.tags
-                    .iter()
-                    .any(|t| lower_tags.contains(&t.to_lowercase()))
-            }
-            AccountSpecification::FullText(query) => {
-                let query = query.trim().to_lowercase();
-                po.name.to_lowercase().contains(&query)
-                    || po.description.to_lowercase().contains(&query)
-                    || po.tags.iter().any(|t| t.to_lowercase().contains(&query))
-            }
-            AccountSpecification::Archived(archived) => {
-                if *archived {
-                    po.archived_at.is_some()
-                } else {
-                    po.archived_at.is_none()
-                }
-            }
-        }
-    }
-}
+impl InMemoryAccountRepository {}
 
 #[async_trait::async_trait]
 impl InMemoryReadRepository<AccountSpec> for InMemoryAccountRepository {
     type Persistence = AccountPo;
 
     fn satisfies(&self, po: &AccountPo, spec: &AccountSpec) -> bool {
-        spec.evaluate(&|leaf| self.satisfies_leaf(po, leaf))
+        let entity = self.convert_to_entity(po.clone());
+        spec.matches(&entity)
     }
 
     fn convert_to_entity(&self, po: AccountPo) -> Account {

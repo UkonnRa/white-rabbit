@@ -2,11 +2,11 @@ use std::collections::HashSet;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use shared::{Specification, SpecificationExpression};
+use shared::{Specification, SpecificationEvaluator, SpecificationExpression};
 
 use crate::account::AccountId;
 use crate::journal::JournalId;
-use crate::record::{RecordId, RecordItemKind};
+use crate::record::{Record, RecordId, RecordItemKind, RecordItems};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecordSpecification {
@@ -27,6 +27,52 @@ pub enum RecordSpecification {
 }
 
 impl Specification for RecordSpecification {}
+
+impl SpecificationEvaluator<Record> for RecordSpecification {
+    fn matches(&self, r: &Record) -> bool {
+        match self {
+            Self::Id(ids) => ids.contains(&r.id),
+            Self::JournalId(ids) => ids.contains(&r.journal_id),
+            Self::AccountId(ids) => {
+                let record_ids: HashSet<AccountId> = match &r.items {
+                    RecordItems::Transactions(txns) => {
+                        txns.iter().map(|t| t.account_id.clone()).collect()
+                    }
+                    RecordItems::Validations(vals) => {
+                        vals.iter().map(|v| v.account_id.clone()).collect()
+                    }
+                };
+                ids.iter().any(|id| record_ids.contains(id))
+            }
+            Self::Date(dates) => dates.contains(&r.date),
+            Self::DateFrom(date) => r.date >= *date,
+            Self::DateTo(date) => r.date <= *date,
+            Self::Payee(payees) => {
+                let lower_payee = r.payee.to_lowercase();
+                payees.iter().any(|p| p.to_lowercase() == lower_payee)
+            }
+            Self::Tag(tags) => {
+                let lower_tags: HashSet<String> = tags.iter().map(|t| t.to_lowercase()).collect();
+                r.tags
+                    .iter()
+                    .any(|t| lower_tags.contains(&t.to_string().to_lowercase()))
+            }
+            Self::ItemKind(kind) => matches!(
+                (&r.items, kind),
+                (RecordItems::Transactions(_), RecordItemKind::Transaction)
+                    | (RecordItems::Validations(_), RecordItemKind::Validation)
+            ),
+            Self::FullText(query) => {
+                let q = query.trim().to_lowercase();
+                r.description.to_lowercase().contains(&q)
+                    || r.payee.to_lowercase().contains(&q)
+                    || r.tags
+                        .iter()
+                        .any(|t| t.to_string().to_lowercase().contains(&q))
+            }
+        }
+    }
+}
 
 /// Composable record specification expression.
 pub type RecordSpec = SpecificationExpression<RecordSpecification>;

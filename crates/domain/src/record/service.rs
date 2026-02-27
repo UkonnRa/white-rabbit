@@ -1,6 +1,7 @@
 use chrono::Utc;
 
 use crate::account::repository::AccountRepository;
+use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId};
 use crate::error::Result;
 use crate::record::command::{
@@ -8,10 +9,11 @@ use crate::record::command::{
 };
 use crate::record::event::{RecordCreated, RecordDeleted, RecordEvent, RecordUpdated};
 use crate::record::repository::RecordRepository;
+use crate::record::specification::RecordSpecification;
 use crate::record::{
     AmountInput, CostInput, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind,
 };
-use shared::{Entity, ErrorKind, RepositorySession, WriteService};
+use shared::{Entity, ErrorKind, HandleResult, RepositorySession, UnitOfWork, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -34,23 +36,55 @@ where
     /// - Items must be non-empty and amount strings must be parseable.
     ///
     /// Balance is NOT enforced — [`Record::is_balanced`] remains advisory.
-    ///
-    /// # Returns
-    ///
-    /// One [`RecordEvent::Created`] per successfully created record, carrying
-    /// the fully resolved items (with looked-up account types and parsed amounts).
-    pub async fn create(
-        &self,
-        sess: &mut R::Session,
-        commands: impl IntoIterator<Item = RecordCommandCreate>,
-    ) -> Result<Vec<RecordEvent>> {
-        Self::do_create(
-            &self.repository,
-            &self.account_repository,
-            sess,
-            commands.into_iter().collect(),
-        )
-        .await
+    async fn do_create(
+        account_repo: &AR,
+        uow: &mut UnitOfWork,
+        sess: &R::Session,
+        commands: Vec<RecordCommandCreate>,
+    ) -> Result<()> {
+        if commands.is_empty() {
+            return Ok(());
+        }
+
+        let now = Utc::now();
+
+        for cmd in commands {
+            let item_inputs = Self::resolve_items(
+                account_repo,
+                uow,
+                sess,
+                &cmd.journal_id,
+                cmd.kind,
+                &cmd.items,
+            )
+            .await?;
+
+            let input = RecordInput {
+                journal_id: cmd.journal_id,
+                date: cmd.date,
+                items: item_inputs,
+                description: cmd.description,
+                tags: cmd.tags.into_iter().collect(),
+                payee: cmd.payee,
+                created_at: Some(now),
+                ..Default::default()
+            };
+            let record = Record::try_from(input)?;
+
+            uow.add_event(RecordEvent::Created(RecordCreated {
+                id: record.id.clone(),
+                journal_id: record.journal_id.clone(),
+                date: record.date,
+                items: record.items.clone(),
+                description: record.description.clone(),
+                tags: record.tags.iter().map(|t| t.to_string()).collect(),
+                payee: record.payee.clone(),
+                created_at: now,
+            }));
+            uow.register_new::<Record>(record);
+        }
+
+        Ok(())
     }
 
     /// Update existing [`Record`]s in a batch.
@@ -62,148 +96,15 @@ where
     /// - If `items` is `Some`, re-validates like create (parse amounts,
     ///   lookup accounts, fill types).
     /// - `journal_id` and `kind` are immutable after creation.
-    ///
-    /// # Returns
-    ///
-    /// One [`RecordEvent::Updated`] per successfully updated record.
-    pub async fn update(
-        &self,
-        sess: &mut R::Session,
-        commands: impl IntoIterator<Item = RecordCommandUpdate>,
-    ) -> Result<Vec<RecordEvent>> {
-        Self::do_update(
-            &self.repository,
-            &self.account_repository,
-            sess,
-            commands.into_iter().collect(),
-        )
-        .await
-    }
-
-    /// Delete [`Record`]s by their IDs.
-    ///
-    /// Nonexistent IDs are silently ignored.
-    ///
-    /// # Returns
-    ///
-    /// One [`RecordEvent::Deleted`] per ID that was passed in.
-    pub async fn delete(
-        &self,
-        sess: &mut R::Session,
-        ids: impl IntoIterator<Item = impl Into<RecordId>>,
-    ) -> Result<Vec<RecordEvent>> {
-        Self::do_delete(
-            &self.repository,
-            sess,
-            ids.into_iter().map(Into::into).collect(),
-        )
-        .await
-    }
-
-    /// Execute a batch of create, update, and delete operations atomically.
-    ///
-    /// Order: **delete -> create -> update**.
-    ///
-    /// # Returns
-    ///
-    /// All events produced by the sub-operations, in execution order.
-    pub async fn batch(
-        &self,
-        sess: &mut R::Session,
-        command: RecordCommandBatch,
-    ) -> Result<Vec<RecordEvent>> {
-        sess.begin().await.map_err(|e| e.convert())?;
-
-        let result =
-            Self::do_batch(&self.repository, &self.account_repository, sess, command).await;
-
-        match result {
-            Ok(v) => {
-                sess.commit().await.map_err(|e| e.convert())?;
-                Ok(v)
-            }
-            Err(e) => {
-                let _ = sess.rollback().await;
-                Err(e)
-            }
-        }
-    }
-
-    async fn do_batch(
-        repo: &R,
-        account_repo: &AR,
-        sess: &mut R::Session,
-        command: RecordCommandBatch,
-    ) -> Result<Vec<RecordEvent>> {
-        let mut events = Vec::new();
-        events.extend(Self::do_delete(repo, sess, command.delete).await?);
-        events.extend(Self::do_create(repo, account_repo, sess, command.create).await?);
-        events.extend(Self::do_update(repo, account_repo, sess, command.update).await?);
-        Ok(events)
-    }
-
-    // ── Internal implementations ─────────────────────────────────
-
-    async fn do_create(
-        repo: &R,
-        account_repo: &AR,
-        sess: &mut R::Session,
-        commands: Vec<RecordCommandCreate>,
-    ) -> Result<Vec<RecordEvent>> {
-        if commands.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let now = Utc::now();
-
-        let mut records = Vec::with_capacity(commands.len());
-        for cmd in commands {
-            let item_inputs =
-                Self::resolve_items(account_repo, sess, &cmd.journal_id, cmd.kind, &cmd.items)
-                    .await?;
-
-            let input = RecordInput {
-                journal_id: cmd.journal_id,
-                date: cmd.date,
-                items: item_inputs,
-                description: cmd.description,
-                tags: cmd.tags.into_iter().collect(),
-                payee: cmd.payee,
-                ..Default::default()
-            };
-            records.push(Record::try_from(input)?);
-        }
-
-        let saved = repo
-            .save_all(sess, &records)
-            .await
-            .map_err(|e| e.convert())?;
-
-        Ok(saved
-            .into_values()
-            .map(|r| {
-                RecordEvent::Created(RecordCreated {
-                    id: r.id,
-                    journal_id: r.journal_id,
-                    date: r.date,
-                    items: r.items,
-                    description: r.description,
-                    tags: r.tags.iter().map(|t| t.to_string()).collect(),
-                    payee: r.payee,
-                    created_at: r.created_at.unwrap_or(now),
-                })
-            })
-            .collect())
-    }
-
     async fn do_update(
         repo: &R,
         account_repo: &AR,
-        sess: &mut R::Session,
+        uow: &mut UnitOfWork,
+        sess: &R::Session,
         commands: Vec<RecordCommandUpdate>,
-    ) -> Result<Vec<RecordEvent>> {
+    ) -> Result<()> {
         if commands.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         let now = Utc::now();
@@ -217,8 +118,8 @@ where
         }
 
         let id_vec: Vec<_> = commands.iter().map(|c| c.id.clone()).collect();
-        let existing = repo
-            .find_all_by_ids(sess, &id_vec)
+        let existing = uow
+            .find_all_by_ids::<Record, RecordSpecification, R>(repo, sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -235,7 +136,6 @@ where
         let commands_by_id: HashMap<_, _> =
             commands.into_iter().map(|c| (c.id.clone(), c)).collect();
 
-        let mut records = Vec::with_capacity(id_vec.len());
         for id in &id_vec {
             let record = &existing[id];
             let cmd = &commands_by_id[id];
@@ -246,7 +146,8 @@ where
             };
 
             let item_inputs = if let Some(new_items) = &cmd.items {
-                Self::resolve_items(account_repo, sess, &record.journal_id, kind, new_items).await?
+                Self::resolve_items(account_repo, uow, sess, &record.journal_id, kind, new_items)
+                    .await?
             } else {
                 Self::items_to_inputs(record)
             };
@@ -255,7 +156,7 @@ where
                 id: record.id.clone(),
                 version: record.version,
                 created_at: record.created_at,
-                last_modified_at: record.last_modified_at,
+                last_modified_at: Some(now),
                 journal_id: record.journal_id.clone(),
                 date: cmd.date.unwrap_or(record.date),
                 items: item_inputs,
@@ -270,46 +171,48 @@ where
                     .unwrap_or_else(|| record.tags.iter().map(|t| t.to_string()).collect()),
                 payee: cmd.payee.clone().unwrap_or_else(|| record.payee.clone()),
             };
-            records.push(Record::try_from(input)?);
+            let record = Record::try_from(input)?;
+
+            uow.add_event(RecordEvent::Updated(RecordUpdated {
+                id: record.id.clone(),
+                date: Some(record.date),
+                items: Some(record.items.clone()),
+                description: Some(record.description.clone()),
+                tags: Some(record.tags.iter().map(|t| t.to_string()).collect()),
+                payee: Some(record.payee.clone()),
+                last_modified_at: now,
+            }));
+            uow.register_dirty::<Record>(record);
         }
 
-        let saved = repo
-            .save_all(sess, &records)
-            .await
-            .map_err(|e| e.convert())?;
-
-        Ok(saved
-            .into_values()
-            .map(|r| {
-                RecordEvent::Updated(RecordUpdated {
-                    id: r.id,
-                    date: Some(r.date),
-                    items: Some(r.items),
-                    description: Some(r.description),
-                    tags: Some(r.tags.iter().map(|t| t.to_string()).collect()),
-                    payee: Some(r.payee),
-                    last_modified_at: r.last_modified_at.unwrap_or(now),
-                })
-            })
-            .collect())
+        Ok(())
     }
 
-    async fn do_delete(
-        repo: &R,
-        sess: &mut R::Session,
-        ids: HashSet<RecordId>,
-    ) -> Result<Vec<RecordEvent>> {
-        if ids.is_empty() {
-            return Ok(vec![]);
+    /// Delete [`Record`]s by their IDs.
+    ///
+    /// Nonexistent IDs are silently ignored.
+    async fn do_delete(uow: &mut UnitOfWork, ids: HashSet<RecordId>) -> Result<()> {
+        for id in ids {
+            uow.add_event(RecordEvent::Deleted(RecordDeleted { id: id.clone() }));
+            uow.register_deleted::<Record>(id);
         }
-        let ids_vec: Vec<_> = ids.into_iter().collect();
-        repo.delete_all_by_ids(sess, &ids_vec)
-            .await
-            .map_err(|e| e.convert())?;
-        Ok(ids_vec
-            .into_iter()
-            .map(|id| RecordEvent::Deleted(RecordDeleted { id }))
-            .collect())
+        Ok(())
+    }
+
+    /// Execute a batch of create, update, and delete operations atomically.
+    ///
+    /// Order: **delete → create → update**.
+    async fn do_batch(
+        repo: &R,
+        account_repo: &AR,
+        uow: &mut UnitOfWork,
+        sess: &R::Session,
+        command: RecordCommandBatch,
+    ) -> Result<()> {
+        Self::do_delete(uow, command.delete).await?;
+        Self::do_create(account_repo, uow, sess, command.create).await?;
+        Self::do_update(repo, account_repo, uow, sess, command.update).await?;
+        Ok(())
     }
 
     // ── Helpers ──────────────────────────────────────────────────
@@ -317,14 +220,15 @@ where
     /// Parse command items, look up accounts, validate, and build [`RecordItemInput`]s.
     async fn resolve_items(
         account_repo: &AR,
-        sess: &mut R::Session,
+        uow: &UnitOfWork,
+        sess: &R::Session,
         journal_id: &crate::journal::JournalId,
         kind: RecordItemKind,
         cmd_items: &[RecordCommandItem],
     ) -> Result<Vec<RecordItemInput>> {
         let account_ids: Vec<AccountId> = cmd_items.iter().map(|i| i.account_id.clone()).collect();
-        let accounts: HashMap<AccountId, Account> = account_repo
-            .find_all_by_ids(sess, &account_ids)
+        let accounts: HashMap<AccountId, Account> = uow
+            .find_all_by_ids::<Account, AccountSpecification, AR>(account_repo, sess, &account_ids)
             .await
             .map_err(|e| e.convert())?;
 
@@ -423,20 +327,79 @@ where
     R: RecordRepository,
     AR: AccountRepository<Session = R::Session>,
 {
+    type Entity = Record;
     type Event = RecordEvent;
     type Session = R::Session;
     type Error = crate::error::Error;
+
+    async fn do_handle(
+        &self,
+        sess: &Self::Session,
+        uow: &mut UnitOfWork,
+        command: RecordCommand,
+    ) -> Result<()> {
+        match command {
+            RecordCommand::Create(cmd) => {
+                Self::do_create(&self.account_repository, uow, sess, vec![cmd]).await
+            }
+            RecordCommand::Update(cmd) => {
+                Self::do_update(
+                    &self.repository,
+                    &self.account_repository,
+                    uow,
+                    sess,
+                    vec![cmd],
+                )
+                .await
+            }
+            RecordCommand::Delete(ids) => Self::do_delete(uow, ids).await,
+            RecordCommand::Batch(cmd) => {
+                Self::do_batch(&self.repository, &self.account_repository, uow, sess, cmd).await
+            }
+        }
+    }
 
     async fn handle(
         &self,
         sess: &mut Self::Session,
         command: RecordCommand,
-    ) -> Result<Vec<RecordEvent>> {
-        match command {
-            RecordCommand::Create(cmd) => self.create(sess, [cmd]).await,
-            RecordCommand::Update(cmd) => self.update(sess, [cmd]).await,
-            RecordCommand::Delete(ids) => self.delete(sess, ids).await,
-            RecordCommand::Batch(cmd) => self.batch(sess, cmd).await,
+    ) -> Result<HandleResult<Record, RecordEvent>> {
+        let mut uow = UnitOfWork::new();
+        sess.begin().await.map_err(|e| e.convert())?;
+
+        if let Err(e) = self.do_handle(sess, &mut uow, command).await {
+            let _ = sess.rollback().await;
+            return Err(e);
         }
+
+        let events = uow.events::<RecordEvent>();
+        let mut saved_entities = Vec::new();
+
+        if let Some(cs) = uow.take_change_set::<Record>() {
+            if !cs.deleted.is_empty() {
+                let ids: Vec<_> = cs.deleted.into_iter().collect();
+                if let Err(e) = self.repository.delete_all_by_ids(sess, &ids).await {
+                    let _ = sess.rollback().await;
+                    return Err(e.convert());
+                }
+            }
+
+            let to_save: Vec<_> = cs.new.into_values().chain(cs.dirty.into_values()).collect();
+            if !to_save.is_empty() {
+                match self.repository.save_all(sess, &to_save).await {
+                    Ok(saved) => saved_entities = saved.into_values().collect(),
+                    Err(e) => {
+                        let _ = sess.rollback().await;
+                        return Err(e.convert());
+                    }
+                }
+            }
+        }
+
+        sess.commit().await.map_err(|e| e.convert())?;
+        Ok(HandleResult {
+            entities: saved_entities,
+            events,
+        })
     }
 }

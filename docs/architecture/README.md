@@ -118,10 +118,19 @@ Only changed entities are staged. Unchanged data is read from primary.
 - Subscribers filter for specific event variants locally after receiving category-level messages.
 - See `docs/adr/0003-in-memory-event-bus-routing.md` for implementation-specific choices.
 
-## 12. Decision Records
+## 12. Unit of Work Implementation
+- UoW is a generic, type-erased in-memory change tracker (new/dirty/deleted entities + event buffer).
+- UoW overlay queries merge in-memory changes with database results: tombstones removed, new/dirty merged.
+- Write-path UoW queries must be single-aggregate-type; cross-aggregate resolution is decomposed at the service level.
+- `SpecificationEvaluator` provides in-memory specification matching for overlay queries.
+- `WriteService` has two methods: `do_handle` (pure, side-effect-free) and `handle` (orchestrates persistence).
+- See `docs/adr/0005-unit-of-work-write-service-split.md`.
+
+## 13. Decision Records
 Architecture decisions and trade-offs are recorded in ADRs:
 - See `docs/adr/README.md`
 - See `docs/adr/0001-ddd-dry-run-cqrs-specification.md`
 - See `docs/adr/0002-event-sourcing-dual-write-persistence.md`
 - See `docs/adr/0003-in-memory-event-bus-routing.md`
 - See `docs/adr/0004-transaction-boundaries-long-running-processes.md`
+- See `docs/adr/0005-unit-of-work-write-service-split.md`

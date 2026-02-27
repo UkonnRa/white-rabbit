@@ -11,7 +11,7 @@ use crate::account::repository::AccountRepository;
 use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId, AccountInput};
 use crate::error::Result;
-use shared::{Entity, ErrorKind, RepositorySession, WriteService};
+use shared::{Entity, ErrorKind, HandleResult, RepositorySession, UnitOfWork, WriteService};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -29,10 +29,6 @@ impl<R: AccountRepository> AccountService<R> {
     /// - Names must not be one of the 5 reserved root names (case-insensitive).
     /// - The account type is inherited from the parent.
     ///
-    /// # Returns
-    ///
-    /// One [`AccountEvent::Created`] per successfully created account.
-    ///
     /// # Errors
     ///
     /// - [`ErrorKind::Shared(NotFound)`](shared::ErrorKind::NotFound) — parent not found.
@@ -41,125 +37,14 @@ impl<R: AccountRepository> AccountService<R> {
     /// - [`ErrorKind::Shared(DuplicateValues)`](shared::ErrorKind::DuplicateValues) — duplicate
     ///   names among siblings.
     /// - [`ErrorKind::Shared(NonEmpty)`](shared::ErrorKind::NonEmpty) — empty name.
-    pub async fn create(
-        &self,
-        sess: &mut R::Session,
-        commands: impl IntoIterator<Item = AccountCommandCreate>,
-    ) -> Result<Vec<AccountEvent>> {
-        Self::do_create(&self.repository, sess, commands.into_iter().collect()).await
-    }
-
-    /// Update existing [`Account`]s in a batch.
-    ///
-    /// # Prerequisites
-    ///
-    /// - Each `id` must refer to an existing account.
-    /// - Each `id` must appear at most once in the batch.
-    /// - New names must be unique among siblings (same parent), with swap support.
-    /// - New names must not be reserved root names.
-    ///
-    /// # Returns
-    ///
-    /// One [`AccountEvent::Updated`] per successfully updated account.
-    pub async fn update(
-        &self,
-        sess: &mut R::Session,
-        commands: impl IntoIterator<Item = AccountCommandUpdate>,
-    ) -> Result<Vec<AccountEvent>> {
-        Self::do_update(&self.repository, sess, commands.into_iter().collect()).await
-    }
-
-    /// Delete [`Account`]s by their IDs.
-    ///
-    /// Cascades: all descendants are deleted too. Duplicate and nonexistent IDs
-    /// are silently ignored.
-    ///
-    /// # Returns
-    ///
-    /// One [`AccountEvent::Deleted`] per actually-deleted account (including
-    /// cascade-deleted descendants).
-    pub async fn delete(
-        &self,
-        sess: &mut R::Session,
-        ids: impl IntoIterator<Item = impl Into<AccountId>>,
-    ) -> Result<Vec<AccountEvent>> {
-        Self::do_delete(
-            &self.repository,
-            sess,
-            ids.into_iter().map(Into::into).collect(),
-        )
-        .await
-    }
-
-    /// Archive [`Account`]s and all their descendants.
-    ///
-    /// Sets `archived_at` on the specified accounts and all descendants.
-    /// Already-archived accounts are silently skipped.
-    ///
-    /// # Returns
-    ///
-    /// One [`AccountEvent::Archived`] per newly-archived account (excludes
-    /// already-archived accounts).
-    pub async fn archive(
-        &self,
-        sess: &mut R::Session,
-        command: AccountCommandArchive,
-    ) -> Result<Vec<AccountEvent>> {
-        Self::do_archive(&self.repository, sess, command).await
-    }
-
-    /// Execute a batch of create, update, delete, and archive operations atomically.
-    ///
-    /// Order: **delete -> archive -> create -> update**.
-    ///
-    /// # Returns
-    ///
-    /// All events produced by the sub-operations, in execution order.
-    pub async fn batch(
-        &self,
-        sess: &mut R::Session,
-        command: AccountCommandBatch,
-    ) -> Result<Vec<AccountEvent>> {
-        sess.begin().await.map_err(|e| e.convert())?;
-
-        let result = Self::do_batch(&self.repository, sess, command).await;
-
-        match result {
-            Ok(v) => {
-                sess.commit().await.map_err(|e| e.convert())?;
-                Ok(v)
-            }
-            Err(e) => {
-                let _ = sess.rollback().await;
-                Err(e)
-            }
-        }
-    }
-
-    async fn do_batch(
-        repo: &R,
-        sess: &mut R::Session,
-        command: AccountCommandBatch,
-    ) -> Result<Vec<AccountEvent>> {
-        let mut events = Vec::new();
-        events.extend(Self::do_delete(repo, sess, command.delete).await?);
-        for archive_cmd in command.archive {
-            events.extend(Self::do_archive(repo, sess, archive_cmd).await?);
-        }
-        events.extend(Self::do_create(repo, sess, command.create).await?);
-        events.extend(Self::do_update(repo, sess, command.update).await?);
-        Ok(events)
-    }
-
-    // ── Internal implementations ─────────────────────────────────
-
     async fn do_create(
         repo: &R,
-        sess: &mut R::Session,
+        sess: &R::Session,
+        uow: &mut UnitOfWork,
         commands: Vec<AccountCommandCreate>,
-    ) -> Result<Vec<AccountEvent>> {
+    ) -> Result<()> {
         if commands.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         let now = Utc::now();
@@ -175,8 +60,8 @@ impl<R: AccountRepository> AccountService<R> {
         }
 
         let parent_ids: Vec<_> = commands.iter().map(|c| c.parent_id.clone()).collect();
-        let parents = repo
-            .find_all_by_ids(sess, &parent_ids)
+        let parents = uow
+            .find_all_by_ids::<Account, AccountSpecification, R>(repo, sess, &parent_ids)
             .await
             .map_err(|e| e.convert())?;
 
@@ -214,7 +99,11 @@ impl<R: AccountRepository> AccountService<R> {
         for (parent_id, new_names) in &names_by_parent {
             let spec = AccountSpecification::parent_id((*parent_id).clone())
                 & AccountSpecification::names(new_names.iter().copied());
-            if let Some(existing) = repo.find_one(sess, &spec).await.map_err(|e| e.convert())? {
+            if let Some(existing) = uow
+                .find_one::<Account, AccountSpecification, R>(repo, sess, &spec)
+                .await
+                .map_err(|e| e.convert())?
+            {
                 return Err(ErrorKind::duplicate_values(&existing.name)
                     .with_resource_type(Account::ENTITY_TYPE)
                     .with_field("name")
@@ -222,43 +111,33 @@ impl<R: AccountRepository> AccountService<R> {
             }
         }
 
-        let accounts = commands
-            .into_iter()
-            .map(|cmd| {
-                let parent = &parents[&cmd.parent_id];
-                let input = AccountInput {
-                    journal_id: cmd.journal_id,
-                    parent_id: Some(cmd.parent_id),
-                    r#type: parent.r#type,
-                    name: cmd.name,
-                    description: cmd.description,
-                    tags: cmd.tags.into_iter().collect(),
-                    ..Default::default()
-                };
-                input.try_into()
-            })
-            .collect::<Result<Vec<Account>>>()?;
+        for cmd in commands {
+            let parent = &parents[&cmd.parent_id];
+            let input = AccountInput {
+                journal_id: cmd.journal_id,
+                parent_id: Some(cmd.parent_id),
+                r#type: parent.r#type,
+                name: cmd.name,
+                description: cmd.description,
+                tags: cmd.tags.into_iter().collect(),
+                created_at: Some(now),
+                ..Default::default()
+            };
+            let account: Account = input.try_into()?;
+            uow.add_event(AccountEvent::Created(AccountCreated {
+                id: account.id.clone(),
+                journal_id: account.journal_id.clone(),
+                parent_id: account.parent_id.clone(),
+                r#type: account.r#type,
+                name: account.name.to_string(),
+                description: account.description.clone(),
+                tags: account.tags.iter().map(|t| t.to_string()).collect(),
+                created_at: now,
+            }));
+            uow.register_new::<Account>(account);
+        }
 
-        let saved = repo
-            .save_all(sess, &accounts)
-            .await
-            .map_err(|e| e.convert())?;
-
-        Ok(saved
-            .into_values()
-            .map(|a| {
-                AccountEvent::Created(AccountCreated {
-                    id: a.id,
-                    journal_id: a.journal_id,
-                    parent_id: a.parent_id,
-                    r#type: a.r#type,
-                    name: a.name.to_string(),
-                    description: a.description,
-                    tags: a.tags.iter().map(|t| t.to_string()).collect(),
-                    created_at: a.created_at.unwrap_or(now),
-                })
-            })
-            .collect())
+        Ok(())
     }
 
     fn validate_update_ids(commands: &[AccountCommandUpdate]) -> Result<HashSet<&AccountId>> {
@@ -296,8 +175,9 @@ impl<R: AccountRepository> AccountService<R> {
     }
 
     async fn validate_update_name_conflicts(
+        uow: &UnitOfWork,
         repo: &R,
-        sess: &mut R::Session,
+        sess: &R::Session,
         commands: &[AccountCommandUpdate],
         existing: &HashMap<AccountId, Account>,
         batch_ids: &HashSet<&AccountId>,
@@ -312,8 +192,8 @@ impl<R: AccountRepository> AccountService<R> {
             };
             let spec = AccountSpecification::parent_id(parent_id.clone())
                 & AccountSpecification::name(&cmd.name);
-            let conflicts = repo
-                .find_all(sess, &spec, None)
+            let conflicts = uow
+                .find_all::<Account, AccountSpecification, R>(repo, sess, &spec, None)
                 .await
                 .map_err(|e| e.convert())?;
             for (conflict_id, conflict) in &conflicts {
@@ -328,12 +208,16 @@ impl<R: AccountRepository> AccountService<R> {
         Ok(())
     }
 
-    fn build_updated_account(account: &Account, cmd: &AccountCommandUpdate) -> Result<Account> {
+    fn build_updated_account(
+        account: &Account,
+        cmd: &AccountCommandUpdate,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Account> {
         let input = AccountInput {
             id: account.id.clone(),
             version: account.version,
             created_at: account.created_at,
-            last_modified_at: account.last_modified_at,
+            last_modified_at: Some(now),
             archived_at: account.archived_at,
             journal_id: account.journal_id.clone(),
             parent_id: account.parent_id.clone(),
@@ -356,13 +240,31 @@ impl<R: AccountRepository> AccountService<R> {
         input.try_into()
     }
 
+    /// Update existing [`Account`]s in a batch.
+    ///
+    /// # Prerequisites
+    ///
+    /// - Each `id` must refer to an existing account.
+    /// - Each `id` must appear at most once in the batch.
+    /// - New names must be unique among siblings (same parent), with swap support.
+    /// - New names must not be reserved root names.
+    ///
+    /// # Errors
+    ///
+    /// - [`ErrorKind::Shared(NotFound)`](shared::ErrorKind::NotFound)
+    ///   — an account ID does not exist.
+    /// - [`ErrorKind::Shared(DuplicateValues)`](shared::ErrorKind::DuplicateValues)
+    ///   — duplicate names among siblings.
+    /// - [`ErrorKind::Shared(Conflict)`](shared::ErrorKind::Conflict)
+    ///   — name is reserved.
     async fn do_update(
         repo: &R,
-        sess: &mut R::Session,
+        sess: &R::Session,
+        uow: &mut UnitOfWork,
         commands: Vec<AccountCommandUpdate>,
-    ) -> Result<Vec<AccountEvent>> {
+    ) -> Result<()> {
         if commands.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         let now = Utc::now();
@@ -370,8 +272,8 @@ impl<R: AccountRepository> AccountService<R> {
         Self::validate_update_names(&commands)?;
 
         let id_vec: Vec<_> = commands.iter().map(|c| c.id.clone()).collect();
-        let existing = repo
-            .find_all_by_ids(sess, &id_vec)
+        let existing = uow
+            .find_all_by_ids::<Account, AccountSpecification, R>(repo, sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -385,42 +287,39 @@ impl<R: AccountRepository> AccountService<R> {
             }
         }
 
-        Self::validate_update_name_conflicts(repo, sess, &commands, &existing, &batch_ids).await?;
+        Self::validate_update_name_conflicts(uow, repo, sess, &commands, &existing, &batch_ids)
+            .await?;
 
         let commands_by_id: HashMap<_, _> =
             commands.into_iter().map(|c| (c.id.clone(), c)).collect();
 
-        let accounts = id_vec
-            .iter()
-            .map(|id| Self::build_updated_account(&existing[id], &commands_by_id[id]))
-            .collect::<Result<Vec<_>>>()?;
+        for id in &id_vec {
+            let account = Self::build_updated_account(&existing[id], &commands_by_id[id], now)?;
+            uow.add_event(AccountEvent::Updated(AccountUpdated {
+                id: account.id.clone(),
+                name: Some(account.name.to_string()),
+                description: Some(account.description.clone()),
+                tags: Some(account.tags.iter().map(|t| t.to_string()).collect()),
+                last_modified_at: now,
+            }));
+            uow.register_dirty::<Account>(account);
+        }
 
-        let saved = repo
-            .save_all(sess, &accounts)
-            .await
-            .map_err(|e| e.convert())?;
-
-        Ok(saved
-            .into_values()
-            .map(|a| {
-                AccountEvent::Updated(AccountUpdated {
-                    id: a.id,
-                    name: Some(a.name.to_string()),
-                    description: Some(a.description),
-                    tags: Some(a.tags.iter().map(|t| t.to_string()).collect()),
-                    last_modified_at: a.last_modified_at.unwrap_or(now),
-                })
-            })
-            .collect())
+        Ok(())
     }
 
+    /// Delete [`Account`]s by their IDs.
+    ///
+    /// Cascades: all descendants are deleted too. Duplicate and nonexistent
+    /// IDs are silently ignored.
     async fn do_delete(
         repo: &R,
-        sess: &mut R::Session,
+        sess: &R::Session,
+        uow: &mut UnitOfWork,
         ids: HashSet<AccountId>,
-    ) -> Result<Vec<AccountEvent>> {
+    ) -> Result<()> {
         if ids.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         let mut all_ids: HashSet<AccountId> = ids;
@@ -428,8 +327,8 @@ impl<R: AccountRepository> AccountService<R> {
 
         while !frontier.is_empty() {
             let spec = AccountSpecification::parent_ids(frontier.iter().cloned());
-            let children = repo
-                .find_all(sess, &spec, None)
+            let children = uow
+                .find_all::<Account, AccountSpecification, R>(repo, sess, &spec, None)
                 .await
                 .map_err(|e| e.convert())?;
             frontier = children
@@ -439,24 +338,26 @@ impl<R: AccountRepository> AccountService<R> {
                 .collect();
         }
 
-        let ids_vec: Vec<_> = all_ids.into_iter().collect();
-        repo.delete_all_by_ids(sess, &ids_vec)
-            .await
-            .map_err(|e| e.convert())?;
+        for id in all_ids {
+            uow.add_event(AccountEvent::Deleted(AccountDeleted { id: id.clone() }));
+            uow.register_deleted::<Account>(id);
+        }
 
-        Ok(ids_vec
-            .into_iter()
-            .map(|id| AccountEvent::Deleted(AccountDeleted { id }))
-            .collect())
+        Ok(())
     }
 
+    /// Archive [`Account`]s and all their descendants.
+    ///
+    /// Sets `archived_at` on the specified accounts and all descendants.
+    /// Already-archived accounts are silently skipped.
     async fn do_archive(
         repo: &R,
-        sess: &mut R::Session,
+        sess: &R::Session,
+        uow: &mut UnitOfWork,
         command: AccountCommandArchive,
-    ) -> Result<Vec<AccountEvent>> {
+    ) -> Result<()> {
         if command.ids.is_empty() {
-            return Ok(vec![]);
+            return Ok(());
         }
 
         let mut all_ids: HashSet<AccountId> = command.ids;
@@ -464,8 +365,8 @@ impl<R: AccountRepository> AccountService<R> {
 
         while !frontier.is_empty() {
             let spec = AccountSpecification::parent_ids(frontier.iter().cloned());
-            let children = repo
-                .find_all(sess, &spec, None)
+            let children = uow
+                .find_all::<Account, AccountSpecification, R>(repo, sess, &spec, None)
                 .await
                 .map_err(|e| e.convert())?;
             frontier = children
@@ -476,58 +377,118 @@ impl<R: AccountRepository> AccountService<R> {
         }
 
         let ids_vec: Vec<_> = all_ids.into_iter().collect();
-        let existing = repo
-            .find_all_by_ids(sess, &ids_vec)
+        let existing = uow
+            .find_all_by_ids::<Account, AccountSpecification, R>(repo, sess, &ids_vec)
             .await
             .map_err(|e| e.convert())?;
 
-        let to_update: Vec<Account> = existing
-            .into_values()
-            .filter(|a| !a.is_archived())
-            .map(|mut a| {
-                a.archived_at = Some(command.archived_at);
-                a
-            })
-            .collect();
-
-        if to_update.is_empty() {
-            return Ok(vec![]);
+        for account in existing.into_values() {
+            if account.is_archived() {
+                continue;
+            }
+            let mut archived = account;
+            archived.archived_at = Some(command.archived_at);
+            uow.add_event(AccountEvent::Archived(AccountArchived {
+                id: archived.id.clone(),
+                archived_at: command.archived_at,
+            }));
+            uow.register_dirty::<Account>(archived);
         }
 
-        let saved = repo
-            .save_all(sess, &to_update)
-            .await
-            .map_err(|e| e.convert())?;
+        Ok(())
+    }
 
-        Ok(saved
-            .into_values()
-            .map(|a| {
-                AccountEvent::Archived(AccountArchived {
-                    id: a.id,
-                    archived_at: a.archived_at.unwrap_or(command.archived_at),
-                })
-            })
-            .collect())
+    /// Execute a batch of create, update, delete, and archive operations
+    /// atomically.
+    ///
+    /// Order: **delete → archive → create → update**.
+    async fn do_batch(
+        repo: &R,
+        sess: &R::Session,
+        uow: &mut UnitOfWork,
+        command: AccountCommandBatch,
+    ) -> Result<()> {
+        Self::do_delete(repo, sess, uow, command.delete).await?;
+        for archive_cmd in command.archive {
+            Self::do_archive(repo, sess, uow, archive_cmd).await?;
+        }
+        Self::do_create(repo, sess, uow, command.create).await?;
+        Self::do_update(repo, sess, uow, command.update).await?;
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl<R: AccountRepository> WriteService<AccountCommand> for AccountService<R> {
+    type Entity = Account;
     type Event = AccountEvent;
     type Session = R::Session;
     type Error = crate::error::Error;
+
+    async fn do_handle(
+        &self,
+        sess: &Self::Session,
+        uow: &mut UnitOfWork,
+        command: AccountCommand,
+    ) -> Result<()> {
+        match command {
+            AccountCommand::Create(cmd) => {
+                Self::do_create(&self.repository, sess, uow, vec![cmd]).await
+            }
+            AccountCommand::Update(cmd) => {
+                Self::do_update(&self.repository, sess, uow, vec![cmd]).await
+            }
+            AccountCommand::Delete(ids) => Self::do_delete(&self.repository, sess, uow, ids).await,
+            AccountCommand::Archive(cmd) => {
+                Self::do_archive(&self.repository, sess, uow, cmd).await
+            }
+            AccountCommand::Batch(cmd) => Self::do_batch(&self.repository, sess, uow, cmd).await,
+        }
+    }
 
     async fn handle(
         &self,
         sess: &mut Self::Session,
         command: AccountCommand,
-    ) -> Result<Vec<AccountEvent>> {
-        match command {
-            AccountCommand::Create(cmd) => self.create(sess, [cmd]).await,
-            AccountCommand::Update(cmd) => self.update(sess, [cmd]).await,
-            AccountCommand::Delete(ids) => self.delete(sess, ids).await,
-            AccountCommand::Archive(cmd) => self.archive(sess, cmd).await,
-            AccountCommand::Batch(cmd) => self.batch(sess, cmd).await,
+    ) -> Result<HandleResult<Account, AccountEvent>> {
+        let mut uow = UnitOfWork::new();
+
+        sess.begin().await.map_err(|e| e.convert())?;
+
+        let result = self.do_handle(sess, &mut uow, command).await;
+
+        match result {
+            Ok(()) => {
+                let entities = uow.entities::<Account>();
+                let events = uow.events::<AccountEvent>();
+
+                if let Some(cs) = uow.take_change_set::<Account>() {
+                    if !cs.deleted.is_empty() {
+                        let ids: Vec<_> = cs.deleted.into_iter().collect();
+                        self.repository
+                            .delete_all_by_ids(sess, &ids)
+                            .await
+                            .map_err(|e| e.convert())?;
+                    }
+
+                    let to_save: Vec<_> =
+                        cs.new.into_values().chain(cs.dirty.into_values()).collect();
+                    if !to_save.is_empty() {
+                        self.repository
+                            .save_all(sess, &to_save)
+                            .await
+                            .map_err(|e| e.convert())?;
+                    }
+                }
+
+                sess.commit().await.map_err(|e| e.convert())?;
+
+                Ok(HandleResult { entities, events })
+            }
+            Err(e) => {
+                let _ = sess.rollback().await;
+                Err(e)
+            }
         }
     }
 }
