@@ -1,9 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use chrono::Utc;
 
 use crate::error::ErrorKind;
 use crate::journal::{JournalId, JournalInput};
-use shared::{Entity, EntityId};
+use shared::{AggregateRoot, Entity, EntityId};
 
+use super::event::*;
 use super::{Account, AccountContext, AccountId, AccountInput, AccountType};
 
 // ── Input tests ──────────────────────────────────────────────────
@@ -268,4 +271,157 @@ fn test_context_parent_not_found() {
     assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NotFound));
     assert_eq!(err.context.resource_type, Some(Account::ENTITY_TYPE));
     assert_eq!(err.context.field.as_deref(), Some("parent_id"));
+}
+
+// ── AggregateRoot apply tests ────────────────────────────────────
+
+fn default_account() -> Account {
+    AccountInput {
+        id: AccountId::from_value("seed"),
+        journal_id: JournalId::from_value("j"),
+        r#type: AccountType::Asset,
+        name: "Seed".to_string(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap()
+}
+
+#[test]
+fn test_apply_created_overwrites_all_fields() {
+    let mut account = default_account();
+    let now = Utc::now();
+    account.apply(&AccountEvent::Created(AccountCreated {
+        id: AccountId::from("new-id"),
+        journal_id: JournalId::from("j-new"),
+        parent_id: Some(AccountId::from("parent")),
+        r#type: AccountType::Expense,
+        name: "Food".to_string(),
+        description: "Groceries".to_string(),
+        tags: HashSet::from(["grocery".to_string()]),
+        created_at: now,
+    }));
+
+    assert_eq!(account.id, AccountId::from("new-id"));
+    assert_eq!(account.journal_id, JournalId::from("j-new"));
+    assert_eq!(account.parent_id, Some(AccountId::from("parent")));
+    assert_eq!(account.r#type, AccountType::Expense);
+    assert_eq!(account.name.to_string(), "Food");
+    assert_eq!(account.description, "Groceries");
+    assert_eq!(account.tags.len(), 1);
+    assert_eq!(account.created_at, Some(now));
+}
+
+#[test]
+fn test_apply_updated_patches_changed_fields() {
+    let mut account = default_account();
+    let now = Utc::now();
+    account.apply(&AccountEvent::Updated(AccountUpdated {
+        id: account.id.clone(),
+        name: Some("Renamed".to_string()),
+        description: None,
+        tags: None,
+        last_modified_at: now,
+    }));
+
+    assert_eq!(account.name.to_string(), "Renamed");
+    assert_eq!(account.description, "");
+    assert_eq!(account.last_modified_at, Some(now));
+}
+
+#[test]
+fn test_apply_updated_leaves_unset_fields_unchanged() {
+    let mut account = default_account();
+    let original_name = account.name.to_string();
+    let now = Utc::now();
+    account.apply(&AccountEvent::Updated(AccountUpdated {
+        id: account.id.clone(),
+        name: None,
+        description: Some("New desc".to_string()),
+        tags: None,
+        last_modified_at: now,
+    }));
+
+    assert_eq!(account.name.to_string(), original_name);
+    assert_eq!(account.description, "New desc");
+}
+
+#[test]
+fn test_apply_archived_sets_archived_at() {
+    let mut account = default_account();
+    let now = Utc::now();
+    account.apply(&AccountEvent::Archived(AccountArchived {
+        id: account.id.clone(),
+        archived_at: now,
+    }));
+
+    assert_eq!(account.archived_at, Some(now));
+}
+
+#[test]
+fn test_apply_deleted_is_noop() {
+    let mut account = default_account();
+    let before = account.clone();
+    account.apply(&AccountEvent::Deleted(AccountDeleted {
+        id: account.id.clone(),
+    }));
+    assert_eq!(account, before);
+}
+
+#[test]
+fn test_apply_is_deterministic() {
+    let mut a = default_account();
+    let mut b = a.clone();
+    let event = AccountEvent::Updated(AccountUpdated {
+        id: a.id.clone(),
+        name: Some("Deterministic".to_string()),
+        description: Some("Same".to_string()),
+        tags: Some(HashSet::from(["t".to_string()])),
+        last_modified_at: Utc::now(),
+    });
+    a.apply(&event);
+    b.apply(&event);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn test_apply_multi_event_fold() {
+    let mut account = default_account();
+    let t1 = Utc::now();
+    let t2 = Utc::now();
+    let t3 = Utc::now();
+
+    let events = vec![
+        AccountEvent::Created(AccountCreated {
+            id: AccountId::from("a1"),
+            journal_id: JournalId::from("j1"),
+            parent_id: None,
+            r#type: AccountType::Income,
+            name: "Salary".to_string(),
+            description: "Monthly".to_string(),
+            tags: HashSet::new(),
+            created_at: t1,
+        }),
+        AccountEvent::Updated(AccountUpdated {
+            id: AccountId::from("a1"),
+            name: Some("Consulting".to_string()),
+            description: None,
+            tags: Some(HashSet::from(["work".to_string()])),
+            last_modified_at: t2,
+        }),
+        AccountEvent::Archived(AccountArchived {
+            id: AccountId::from("a1"),
+            archived_at: t3,
+        }),
+    ];
+    for event in &events {
+        account.apply(event);
+    }
+
+    assert_eq!(account.id, AccountId::from("a1"));
+    assert_eq!(account.name.to_string(), "Consulting");
+    assert_eq!(account.description, "Monthly");
+    assert!(account.tags.iter().any(|t| t.to_string() == "work"));
+    assert_eq!(account.archived_at, Some(t3));
+    assert_eq!(account.last_modified_at, Some(t2));
 }

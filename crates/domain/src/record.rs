@@ -1,4 +1,5 @@
 pub mod command;
+pub mod event;
 mod input;
 pub mod repository;
 pub mod service;
@@ -10,12 +11,13 @@ mod value;
 pub use input::*;
 pub use value::*;
 
+use crate::record::event::*;
 use crate::{account::AccountType, journal::JournalId};
 use chrono::{DateTime, NaiveDate, Utc};
 use itertools::Itertools;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use shared::{DomainModel, NonEmpty};
+use shared::{AggregateRoot, DomainModel, NonEmpty};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, DomainModel)]
@@ -34,6 +36,45 @@ pub struct Record {
     pub description: String,
     pub tags: HashSet<NonEmpty<String>>,
     pub payee: String,
+}
+
+impl AggregateRoot for Record {
+    type Event = RecordEvent;
+
+    fn apply(&mut self, event: &RecordEvent) {
+        match event {
+            RecordEvent::Created(e) => {
+                self.id = e.id.clone();
+                self.journal_id = e.journal_id.clone();
+                self.date = e.date;
+                self.items = e.items.clone();
+                self.description = e.description.clone();
+                self.tags = e.tags.iter().map(|t| t.parse().unwrap()).collect();
+                self.payee = e.payee.clone();
+                self.created_at = Some(e.created_at);
+                self.version = 0;
+            }
+            RecordEvent::Updated(e) => {
+                if let Some(date) = e.date {
+                    self.date = date;
+                }
+                if let Some(items) = &e.items {
+                    self.items = items.clone();
+                }
+                if let Some(desc) = &e.description {
+                    self.description = desc.clone();
+                }
+                if let Some(tags) = &e.tags {
+                    self.tags = tags.iter().map(|t| t.parse().unwrap()).collect();
+                }
+                if let Some(payee) = &e.payee {
+                    self.payee = payee.clone();
+                }
+                self.last_modified_at = Some(e.last_modified_at);
+            }
+            RecordEvent::Deleted(_) => {}
+        }
+    }
 }
 
 impl Record {

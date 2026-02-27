@@ -1,7 +1,10 @@
+use chrono::Utc;
+
 use crate::account::command::{
     AccountCommand, AccountCommandArchive, AccountCommandBatch, AccountCommandCreate,
     AccountCommandUpdate,
 };
+use crate::account::event::*;
 use crate::account::repository::AccountRepository;
 use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId, AccountInput};
@@ -436,7 +439,7 @@ impl<R: AccountRepository> AccountService<R> {
 
 #[async_trait::async_trait]
 impl<R: AccountRepository> WriteService<AccountCommand> for AccountService<R> {
-    type Entity = Account;
+    type Event = AccountEvent;
     type Session = R::Session;
     type Error = crate::error::Error;
 
@@ -444,16 +447,116 @@ impl<R: AccountRepository> WriteService<AccountCommand> for AccountService<R> {
         &self,
         sess: &mut Self::Session,
         command: AccountCommand,
-    ) -> Result<Vec<Account>> {
+    ) -> Result<Vec<AccountEvent>> {
+        let now = Utc::now();
         match command {
-            AccountCommand::Create(cmd) => self.create(sess, [cmd]).await,
-            AccountCommand::Update(cmd) => self.update(sess, [cmd]).await,
-            AccountCommand::Delete(ids) => {
-                self.delete(sess, ids).await?;
-                Ok(vec![])
+            AccountCommand::Create(cmd) => {
+                let accounts = self.create(sess, [cmd]).await?;
+                Ok(accounts
+                    .into_iter()
+                    .map(|a| {
+                        AccountEvent::Created(AccountCreated {
+                            id: a.id,
+                            journal_id: a.journal_id,
+                            parent_id: a.parent_id,
+                            r#type: a.r#type,
+                            name: a.name.to_string(),
+                            description: a.description,
+                            tags: a.tags.iter().map(|t| t.to_string()).collect(),
+                            created_at: a.created_at.unwrap_or(now),
+                        })
+                    })
+                    .collect())
             }
-            AccountCommand::Archive(cmd) => self.archive(sess, cmd).await,
-            AccountCommand::Batch(cmd) => self.batch(sess, cmd).await,
+            AccountCommand::Update(cmd) => {
+                let id = cmd.id.clone();
+                let name = if cmd.name.is_empty() {
+                    None
+                } else {
+                    Some(cmd.name.clone())
+                };
+                let description = cmd.description.clone();
+                let tags = cmd.tags.clone();
+                self.update(sess, [cmd]).await?;
+                Ok(vec![AccountEvent::Updated(AccountUpdated {
+                    id,
+                    name,
+                    description,
+                    tags,
+                    last_modified_at: now,
+                })])
+            }
+            AccountCommand::Delete(ids) => {
+                let events: Vec<_> = ids
+                    .iter()
+                    .map(|id| AccountEvent::Deleted(AccountDeleted { id: id.clone() }))
+                    .collect();
+                self.delete(sess, ids).await?;
+                Ok(events)
+            }
+            AccountCommand::Archive(cmd) => {
+                let archived = self.archive(sess, cmd).await?;
+                Ok(archived
+                    .into_iter()
+                    .map(|a| {
+                        AccountEvent::Archived(AccountArchived {
+                            id: a.id,
+                            archived_at: a.archived_at.unwrap_or(now),
+                        })
+                    })
+                    .collect())
+            }
+            AccountCommand::Batch(cmd) => {
+                let delete_events: Vec<_> = cmd
+                    .delete
+                    .iter()
+                    .map(|id| AccountEvent::Deleted(AccountDeleted { id: id.clone() }))
+                    .collect();
+                let archive_cmds = cmd.archive.clone();
+                let create_cmds = cmd.create.clone();
+                let update_cmds = cmd.update.clone();
+
+                self.batch(sess, cmd).await?;
+
+                let mut events = delete_events;
+                for archive_cmd in archive_cmds {
+                    for id in archive_cmd.ids {
+                        events.push(AccountEvent::Archived(AccountArchived {
+                            id,
+                            archived_at: archive_cmd.archived_at,
+                        }));
+                    }
+                }
+                for create_cmd in create_cmds {
+                    events.push(AccountEvent::Created(AccountCreated {
+                        id: AccountId::default(),
+                        journal_id: create_cmd.journal_id,
+                        parent_id: Some(create_cmd.parent_id),
+                        r#type: AccountType::default(),
+                        name: create_cmd.name,
+                        description: create_cmd.description,
+                        tags: create_cmd.tags,
+                        created_at: now,
+                    }));
+                }
+                for update_cmd in update_cmds {
+                    let name = if update_cmd.name.is_empty() {
+                        None
+                    } else {
+                        Some(update_cmd.name)
+                    };
+                    events.push(AccountEvent::Updated(AccountUpdated {
+                        id: update_cmd.id,
+                        name,
+                        description: update_cmd.description,
+                        tags: update_cmd.tags,
+                        last_modified_at: now,
+                    }));
+                }
+                Ok(events)
+            }
         }
     }
 }
+
+use crate::account::AccountType;

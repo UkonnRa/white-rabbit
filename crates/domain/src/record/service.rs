@@ -1,9 +1,12 @@
+use chrono::Utc;
+
 use crate::account::repository::AccountRepository;
 use crate::account::{Account, AccountId};
 use crate::error::Result;
 use crate::record::command::{
     RecordCommand, RecordCommandBatch, RecordCommandCreate, RecordCommandItem, RecordCommandUpdate,
 };
+use crate::record::event::*;
 use crate::record::repository::RecordRepository;
 use crate::record::{
     AmountInput, CostInput, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind,
@@ -369,7 +372,7 @@ where
     R: RecordRepository,
     AR: AccountRepository<Session = R::Session>,
 {
-    type Entity = Record;
+    type Event = RecordEvent;
     type Session = R::Session;
     type Error = crate::error::Error;
 
@@ -377,15 +380,103 @@ where
         &self,
         sess: &mut Self::Session,
         command: RecordCommand,
-    ) -> Result<Vec<Record>> {
+    ) -> Result<Vec<RecordEvent>> {
+        let now = Utc::now();
         match command {
-            RecordCommand::Create(cmd) => self.create(sess, [cmd]).await,
-            RecordCommand::Update(cmd) => self.update(sess, [cmd]).await,
-            RecordCommand::Delete(ids) => {
-                self.delete(sess, ids).await?;
-                Ok(vec![])
+            RecordCommand::Create(cmd) => {
+                let records = self.create(sess, [cmd]).await?;
+                Ok(records
+                    .into_iter()
+                    .map(|r| {
+                        RecordEvent::Created(RecordCreated {
+                            id: r.id,
+                            journal_id: r.journal_id,
+                            date: r.date,
+                            items: r.items,
+                            description: r.description,
+                            tags: r.tags.iter().map(|t| t.to_string()).collect(),
+                            payee: r.payee,
+                            created_at: r.created_at.unwrap_or(now),
+                        })
+                    })
+                    .collect())
             }
-            RecordCommand::Batch(cmd) => self.batch(sess, cmd).await,
+            RecordCommand::Update(cmd) => {
+                let id = cmd.id.clone();
+                let date = cmd.date;
+                let description = cmd.description.clone();
+                let tags = cmd.tags.clone();
+                let payee = cmd.payee.clone();
+                let updated = self.update(sess, [cmd]).await?;
+                let items = updated.first().map(|r| r.items.clone());
+                Ok(vec![RecordEvent::Updated(RecordUpdated {
+                    id,
+                    date,
+                    items,
+                    description,
+                    tags,
+                    payee,
+                    last_modified_at: now,
+                })])
+            }
+            RecordCommand::Delete(ids) => {
+                let events: Vec<_> = ids
+                    .iter()
+                    .map(|id| RecordEvent::Deleted(RecordDeleted { id: id.clone() }))
+                    .collect();
+                self.delete(sess, ids).await?;
+                Ok(events)
+            }
+            RecordCommand::Batch(cmd) => {
+                let delete_events: Vec<_> = cmd
+                    .delete
+                    .iter()
+                    .map(|id| RecordEvent::Deleted(RecordDeleted { id: id.clone() }))
+                    .collect();
+                let create_count = cmd.create.len();
+                let update_cmds: Vec<_> = cmd
+                    .update
+                    .iter()
+                    .map(|u| {
+                        (
+                            u.id.clone(),
+                            u.date,
+                            u.description.clone(),
+                            u.tags.clone(),
+                            u.payee.clone(),
+                        )
+                    })
+                    .collect();
+
+                let results = self.batch(sess, cmd).await?;
+
+                let mut events = delete_events;
+                for r in results.iter().take(create_count) {
+                    events.push(RecordEvent::Created(RecordCreated {
+                        id: r.id.clone(),
+                        journal_id: r.journal_id.clone(),
+                        date: r.date,
+                        items: r.items.clone(),
+                        description: r.description.clone(),
+                        tags: r.tags.iter().map(|t| t.to_string()).collect(),
+                        payee: r.payee.clone(),
+                        created_at: r.created_at.unwrap_or(now),
+                    }));
+                }
+                for (id, date, description, tags, payee) in update_cmds {
+                    let items = results.iter().find(|r| r.id == id).map(|r| r.items.clone());
+                    events.push(RecordEvent::Updated(RecordUpdated {
+                        id,
+                        date,
+                        items,
+                        description,
+                        tags,
+                        payee,
+                        last_modified_at: now,
+                    }));
+                }
+                Ok(events)
+            }
         }
     }
 }

@@ -1,6 +1,9 @@
+use chrono::Utc;
+
 use crate::journal::command::{
     JournalCommand, JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate,
 };
+use crate::journal::event::*;
 use crate::journal::repository::JournalRepository;
 use crate::journal::specification::JournalSpecification;
 use crate::journal::{JournalId, JournalInput};
@@ -309,7 +312,7 @@ impl<R: JournalRepository> JournalService<R> {
 
 #[async_trait::async_trait]
 impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
-    type Entity = Journal;
+    type Event = JournalEvent;
     type Session = R::Session;
     type Error = crate::error::Error;
 
@@ -317,15 +320,87 @@ impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
         &self,
         sess: &mut Self::Session,
         command: JournalCommand,
-    ) -> Result<Vec<Journal>> {
+    ) -> Result<Vec<JournalEvent>> {
+        let now = Utc::now();
         match command {
-            JournalCommand::Create(cmd) => self.create(sess, [cmd]).await,
-            JournalCommand::Update(cmd) => self.update(sess, [cmd]).await,
-            JournalCommand::Delete(ids) => {
-                self.delete(sess, ids).await?;
-                Ok(vec![])
+            JournalCommand::Create(cmd) => {
+                let journals = self.create(sess, [cmd]).await?;
+                Ok(journals
+                    .into_iter()
+                    .map(|j| {
+                        JournalEvent::Created(JournalCreated {
+                            id: j.id,
+                            name: j.name.to_string(),
+                            description: j.description,
+                            tags: j.tags.iter().map(|t| t.to_string()).collect(),
+                            created_at: j.created_at.unwrap_or(now),
+                        })
+                    })
+                    .collect())
             }
-            JournalCommand::Batch(cmd) => self.batch(sess, cmd).await,
+            JournalCommand::Update(cmd) => {
+                let id = cmd.id.clone();
+                let name = if cmd.name.is_empty() {
+                    None
+                } else {
+                    Some(cmd.name.clone())
+                };
+                let description = cmd.description.clone();
+                let tags = cmd.tags.clone();
+                self.update(sess, [cmd]).await?;
+                Ok(vec![JournalEvent::Updated(JournalUpdated {
+                    id,
+                    name,
+                    description,
+                    tags,
+                    last_modified_at: now,
+                })])
+            }
+            JournalCommand::Delete(ids) => {
+                let events: Vec<_> = ids
+                    .iter()
+                    .map(|id| JournalEvent::Deleted(JournalDeleted { id: id.clone() }))
+                    .collect();
+                self.delete(sess, ids).await?;
+                Ok(events)
+            }
+            JournalCommand::Batch(cmd) => {
+                let delete_events: Vec<_> = cmd
+                    .delete
+                    .iter()
+                    .map(|id| JournalEvent::Deleted(JournalDeleted { id: id.clone() }))
+                    .collect();
+                let create_cmds = cmd.create.clone();
+                let update_cmds = cmd.update.clone();
+
+                self.batch(sess, cmd).await?;
+
+                let mut events = delete_events;
+                for create_cmd in create_cmds {
+                    events.push(JournalEvent::Created(JournalCreated {
+                        id: JournalId::default(),
+                        name: create_cmd.name,
+                        description: create_cmd.description,
+                        tags: create_cmd.tags,
+                        created_at: now,
+                    }));
+                }
+                for update_cmd in update_cmds {
+                    let name = if update_cmd.name.is_empty() {
+                        None
+                    } else {
+                        Some(update_cmd.name)
+                    };
+                    events.push(JournalEvent::Updated(JournalUpdated {
+                        id: update_cmd.id,
+                        name,
+                        description: update_cmd.description,
+                        tags: update_cmd.tags,
+                        last_modified_at: now,
+                    }));
+                }
+                Ok(events)
+            }
         }
     }
 }

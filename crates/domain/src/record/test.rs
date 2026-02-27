@@ -1,11 +1,14 @@
+use std::collections::HashSet;
+
 use crate::{
     account::{AccountId, AccountType},
     error::ErrorKind,
     journal::JournalId,
 };
-use chrono::NaiveDate;
-use shared::{Entity, EntityId};
+use chrono::{NaiveDate, Utc};
+use shared::{AggregateRoot, Entity, EntityId};
 
+use super::event::*;
 use super::{Amount, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind};
 
 #[test]
@@ -483,4 +486,159 @@ fn test_shared_error_converts_to_domain_via_map_error() {
     let err = domain_op().unwrap_err();
     assert_eq!(err.error, ErrorKind::Shared(shared::ErrorKind::NonEmpty));
     assert_eq!(err.context.resource_type, Some("Test"));
+}
+
+// ── AggregateRoot apply tests ────────────────────────────────────
+
+fn default_record() -> Record {
+    RecordInput {
+        id: RecordId::from_value("seed"),
+        journal_id: JournalId::from_value("j"),
+        date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+        items: vec![RecordItemInput {
+            account_id: AccountId::from_value("acc"),
+            account_type: AccountType::Asset,
+            kind: RecordItemKind::Transaction,
+            amount: "100 USD".into(),
+            description: String::new(),
+            ..Default::default()
+        }],
+        description: "Seed".to_string(),
+        ..Default::default()
+    }
+    .try_into()
+    .unwrap()
+}
+
+fn sample_created_event() -> RecordCreated {
+    let record = default_record();
+    RecordCreated {
+        id: RecordId::from("r-new"),
+        journal_id: JournalId::from("j-new"),
+        date: NaiveDate::from_ymd_opt(2024, 6, 15).unwrap(),
+        items: record.items.clone(),
+        description: "Created".to_string(),
+        tags: HashSet::from(["tag1".to_string()]),
+        payee: "Cafe".to_string(),
+        created_at: Utc::now(),
+    }
+}
+
+#[test]
+fn test_apply_created_overwrites_all_fields() {
+    let mut record = default_record();
+    let event = sample_created_event();
+    record.apply(&RecordEvent::Created(event.clone()));
+
+    assert_eq!(record.id, RecordId::from("r-new"));
+    assert_eq!(record.journal_id, JournalId::from("j-new"));
+    assert_eq!(record.date, NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
+    assert_eq!(record.description, "Created");
+    assert_eq!(record.payee, "Cafe");
+    assert_eq!(record.tags.len(), 1);
+    assert_eq!(record.created_at, Some(event.created_at));
+}
+
+#[test]
+fn test_apply_updated_patches_changed_fields() {
+    let mut record = default_record();
+    let new_date = NaiveDate::from_ymd_opt(2024, 7, 1).unwrap();
+    let now = Utc::now();
+    record.apply(&RecordEvent::Updated(RecordUpdated {
+        id: record.id.clone(),
+        date: Some(new_date),
+        items: None,
+        description: Some("Updated".to_string()),
+        tags: None,
+        payee: Some("New Payee".to_string()),
+        last_modified_at: now,
+    }));
+
+    assert_eq!(record.date, new_date);
+    assert_eq!(record.description, "Updated");
+    assert_eq!(record.payee, "New Payee");
+    assert_eq!(record.last_modified_at, Some(now));
+}
+
+#[test]
+fn test_apply_updated_leaves_unset_fields_unchanged() {
+    let mut record = default_record();
+    let original_date = record.date;
+    let original_payee = record.payee.clone();
+    let now = Utc::now();
+    record.apply(&RecordEvent::Updated(RecordUpdated {
+        id: record.id.clone(),
+        date: None,
+        items: None,
+        description: Some("Only desc changed".to_string()),
+        tags: None,
+        payee: None,
+        last_modified_at: now,
+    }));
+
+    assert_eq!(record.date, original_date);
+    assert_eq!(record.payee, original_payee);
+    assert_eq!(record.description, "Only desc changed");
+}
+
+#[test]
+fn test_apply_deleted_is_noop() {
+    let mut record = default_record();
+    let before = record.clone();
+    record.apply(&RecordEvent::Deleted(RecordDeleted {
+        id: record.id.clone(),
+    }));
+    assert_eq!(record, before);
+}
+
+#[test]
+fn test_apply_is_deterministic() {
+    let mut a = default_record();
+    let mut b = a.clone();
+    let event = RecordEvent::Updated(RecordUpdated {
+        id: a.id.clone(),
+        date: Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap()),
+        items: None,
+        description: Some("Same".to_string()),
+        tags: None,
+        payee: None,
+        last_modified_at: Utc::now(),
+    });
+    a.apply(&event);
+    b.apply(&event);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn test_apply_multi_event_fold() {
+    let mut record = default_record();
+    let t1 = Utc::now();
+    let t2 = Utc::now();
+
+    let created = sample_created_event();
+    let events = vec![
+        RecordEvent::Created(RecordCreated {
+            created_at: t1,
+            ..created
+        }),
+        RecordEvent::Updated(RecordUpdated {
+            id: RecordId::from("r-new"),
+            date: Some(NaiveDate::from_ymd_opt(2024, 8, 1).unwrap()),
+            items: None,
+            description: Some("Final".to_string()),
+            tags: Some(HashSet::from(["final".to_string()])),
+            payee: None,
+            last_modified_at: t2,
+        }),
+    ];
+    for event in &events {
+        record.apply(event);
+    }
+
+    assert_eq!(record.id, RecordId::from("r-new"));
+    assert_eq!(record.date, NaiveDate::from_ymd_opt(2024, 8, 1).unwrap());
+    assert_eq!(record.description, "Final");
+    assert!(record.tags.iter().any(|t| t.to_string() == "final"));
+    assert_eq!(record.created_at, Some(t1));
+    assert_eq!(record.last_modified_at, Some(t2));
 }

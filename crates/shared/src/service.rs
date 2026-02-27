@@ -1,10 +1,10 @@
 use crate::command::Command;
-use crate::entity::Entity;
+use crate::event::DomainEvent;
 use crate::repository::RepositorySession;
 
 #[async_trait::async_trait]
 pub trait WriteService<C: Command>: Send + Sync {
-    type Entity: Entity;
+    type Event: DomainEvent;
     type Session: RepositorySession;
     type Error;
 
@@ -12,5 +12,5 @@ pub trait WriteService<C: Command>: Send + Sync {
         &self,
         sess: &mut Self::Session,
         command: C,
-    ) -> std::result::Result<Vec<Self::Entity>, Self::Error>;
+    ) -> std::result::Result<Vec<Self::Event>, Self::Error>;
 }

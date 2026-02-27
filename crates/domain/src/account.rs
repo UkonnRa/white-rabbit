@@ -1,5 +1,6 @@
 pub mod command;
 mod context;
+pub mod event;
 mod input;
 pub mod repository;
 pub mod service;
@@ -15,8 +16,9 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use shared::{DomainModel, NonEmpty};
+use shared::{AggregateRoot, DomainModel, NonEmpty};
 
+use crate::account::event::*;
 use crate::journal::JournalId;
 
 /// The Account is a tree, the root Account is one of the 5 types: Asset, Liability, Equity, Income, Expense
@@ -61,6 +63,44 @@ impl Account {
     /// Returns true if this is a root account (no parent).
     pub fn is_root(&self) -> bool {
         self.parent_id.is_none()
+    }
+}
+
+impl AggregateRoot for Account {
+    type Event = AccountEvent;
+
+    fn apply(&mut self, event: &AccountEvent) {
+        match event {
+            AccountEvent::Created(e) => {
+                self.id = e.id.clone();
+                self.journal_id = e.journal_id.clone();
+                self.parent_id = e.parent_id.clone();
+                self.r#type = e.r#type;
+                // apply is validation-free: unwrap is safe because events
+                // are only produced from already-validated command state.
+                self.name = e.name.parse().unwrap();
+                self.description = e.description.clone();
+                self.tags = e.tags.iter().map(|t| t.parse().unwrap()).collect();
+                self.created_at = Some(e.created_at);
+                self.version = 0;
+            }
+            AccountEvent::Updated(e) => {
+                if let Some(name) = &e.name {
+                    self.name = name.parse().unwrap();
+                }
+                if let Some(desc) = &e.description {
+                    self.description = desc.clone();
+                }
+                if let Some(tags) = &e.tags {
+                    self.tags = tags.iter().map(|t| t.parse().unwrap()).collect();
+                }
+                self.last_modified_at = Some(e.last_modified_at);
+            }
+            AccountEvent::Archived(e) => {
+                self.archived_at = Some(e.archived_at);
+            }
+            AccountEvent::Deleted(_) => {}
+        }
     }
 }
 
