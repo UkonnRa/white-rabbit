@@ -48,6 +48,9 @@
   cross-aggregate resolution is decomposed at the service level.
 - `do_handle` must be side-effect-free (no persistence writes);
   `handle` orchestrates persistence and returns entities + events.
+- Shared frontend composables must use `useAsyncData` for reads;
+  endpoint-specific data sources must be injected via Nuxt plugin,
+  not hardcoded in shared code.
 
 ## Error Design Constraints
 

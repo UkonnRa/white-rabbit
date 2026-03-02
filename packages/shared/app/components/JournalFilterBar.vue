@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import type { JournalFilter } from "../models";
+import type { JournalFilter } from "../../models";
 
 const emit = defineEmits<{
   search: [filter: JournalFilter];

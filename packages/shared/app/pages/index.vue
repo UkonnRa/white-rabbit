@@ -1,64 +1,53 @@
 <script setup lang="ts">
-import { ref, onMounted, inject } from "vue";
-import type { Journal, JournalFilter as JournalFilterType } from "../models";
-import type { JournalClient } from "../clients";
-import JournalCard from "../components/JournalCard.vue";
-import JournalForm, { type JournalFormData } from "../components/JournalForm.vue";
-import JournalFilterBar from "../components/JournalFilter.vue";
+import type { Journal, JournalFilter, JournalFormData } from "../../models";
 
-const journalClient = inject<JournalClient>("journalClient")!;
+const currentFilter = ref<JournalFilter>({});
+const { data: journals, status, error: queryError, refresh } = useJournals(currentFilter);
 
-const journals = ref<Journal[]>([]);
-const loading = ref(true);
-const error = ref<string | null>(null);
-const currentFilter = ref<JournalFilterType>({});
+const client = useJournalClient();
 
 const showCreateForm = ref(false);
 const editingJournal = ref<Journal | null>(null);
+const mutationError = ref<string | null>(null);
 
-async function loadJournals(filter?: JournalFilterType) {
-  loading.value = true;
-  error.value = null;
-  try {
-    if (filter !== undefined) currentFilter.value = filter;
-    journals.value = await journalClient.list(currentFilter.value);
-  } catch (e) {
-    error.value = String(e);
-  } finally {
-    loading.value = false;
-  }
+const displayError = computed(
+  () => mutationError.value ?? queryError.value?.message ?? null,
+);
+
+function handleFilter(filter: JournalFilter) {
+  currentFilter.value = filter;
 }
 
 async function handleCreate(data: JournalFormData) {
-  error.value = null;
+  mutationError.value = null;
   try {
-    await journalClient.create(data);
+    await client.create(data);
     showCreateForm.value = false;
-    await loadJournals();
+    await refresh();
   } catch (e) {
-    error.value = String(e);
+    mutationError.value = String(e);
   }
 }
 
 async function handleUpdate(data: JournalFormData) {
   if (!editingJournal.value) return;
-  error.value = null;
+  mutationError.value = null;
   try {
-    await journalClient.update(editingJournal.value.id, data);
+    await client.update(editingJournal.value.id, data);
     editingJournal.value = null;
-    await loadJournals();
+    await refresh();
   } catch (e) {
-    error.value = String(e);
+    mutationError.value = String(e);
   }
 }
 
 async function handleDelete(journal: Journal) {
-  error.value = null;
+  mutationError.value = null;
   try {
-    await journalClient.delete(journal.id);
-    await loadJournals();
+    await client.delete(journal.id);
+    await refresh();
   } catch (e) {
-    error.value = String(e);
+    mutationError.value = String(e);
   }
 }
 
@@ -76,8 +65,6 @@ function cancelForm() {
   showCreateForm.value = false;
   editingJournal.value = null;
 }
-
-onMounted(() => loadJournals());
 </script>
 
 <template>
@@ -87,9 +74,9 @@ onMounted(() => loadJournals());
       <button @click="startCreate">+ New Journal</button>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <div v-if="displayError" class="error">{{ displayError }}</div>
 
-    <JournalFilterBar @search="loadJournals" />
+    <JournalFilterBar @search="handleFilter" />
 
     <JournalForm
       v-if="showCreateForm"
@@ -108,8 +95,8 @@ onMounted(() => loadJournals());
       @cancel="cancelForm"
     />
 
-    <div v-if="loading" class="loading">Loading...</div>
-    <div v-else-if="journals.length === 0" class="empty">
+    <div v-if="status === 'pending'" class="loading">Loading...</div>
+    <div v-else-if="!journals?.length" class="empty">
       No journals found.
     </div>
     <div v-else class="journal-grid">

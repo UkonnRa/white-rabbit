@@ -115,13 +115,13 @@ packages/shared/
 ### Key Changes
 
 - `**[packages/shared/package.json](packages/shared/package.json)**`: Add `nuxt` (^4) as devDependency. Set `"main": "./index.ts"` for type exports.
-- **New `nuxt.config.ts**`: Minimal layer config.
+- **New `nuxt.config.ts`**: Minimal layer config.
 - **[`app/pages/index.vue`]**: Rewrite `JournalListPage.vue` to use auto-imported composables (`useJournals()`, `useJournalClient()`) instead of `inject`. Leverage `AsyncData` status/error directly.
-- `**app/composables/useJournalClient.ts**`: Resolves client from `useNuxtApp().$journalClient`.
-- `**app/composables/journal.ts**`: Wraps client reads in `useAsyncData` and exposes mutation helpers that call `refresh()` after writes.
-- **Rename `JournalFilter.vue` to `JournalFilterBar.vue**`: The current code already aliases it as `JournalFilterBar` everywhere. This avoids auto-import collision with the `JournalFilter` model type.
-- **Move `JournalFormData**` from `JournalForm.vue`'s `<script setup>` to `models/journal.ts` so it is importable without component coupling.
-- **Remove `src/` directory, barrel `src/index.ts`, `src/components/index.ts`, `src/pages/index.ts**` after migration.
+- `**app/composables/useJournalClient.ts`**: Resolves client from `useNuxtApp().$journalClient`.
+- `**app/composables/journal.ts`**: Wraps client reads in `useAsyncData` and exposes mutation helpers that call `refresh()` after writes.
+- **Rename `JournalFilter.vue` to `JournalFilterBar.vue`**: The current code already aliases it as `JournalFilterBar` everywhere. This avoids auto-import collision with the `JournalFilter` model type.
+- **Move `JournalFormData`** from `JournalForm.vue`'s `<script setup>` to `models/journal.ts` so it is importable without component coupling.
+- **Remove `src/` directory, barrel `src/index.ts`, `src/components/index.ts`, `src/pages/index.ts`** after migration.
 
 ### Composable Signatures
 
@@ -183,7 +183,7 @@ packages/endpoint-tauri/
   - Add `nuxt` (^4) as devDependency
   - Remove `vite`, `@vitejs/plugin-vue`, `vue-tsc` devDependencies
   - Update scripts: `"dev": "nuxi dev"`, `"build": "nuxi generate"`, `"preview": "nuxi preview"`
-- **New `nuxt.config.ts**`:
+- **New `nuxt.config.ts`**:
 
 ```typescript
 export default defineNuxtConfig({
@@ -194,7 +194,7 @@ export default defineNuxtConfig({
 })
 ```
 
-- **New `app/plugins/journal-client.ts**`: Replaces `main.ts` provide:
+- **New `app/plugins/journal-client.ts`**: Replaces `main.ts` provide:
 
 ```typescript
 import { TauriJournalClient } from '../../clients'
@@ -204,7 +204,7 @@ export default defineNuxtPlugin(() => ({
 }))
 ```
 
-- **New `app/app.vue**`: Minimal root:
+- **New `app/app.vue`**: Minimal root:
 
 ```vue
 <template>

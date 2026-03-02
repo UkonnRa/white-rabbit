@@ -3,4 +3,5 @@ export type {
   CreateJournalRequest,
   UpdateJournalRequest,
   JournalFilter,
+  JournalFormData,
 } from "./journal";

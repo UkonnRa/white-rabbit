@@ -126,7 +126,44 @@ Only changed entities are staged. Unchanged data is read from primary.
 - `WriteService` has two methods: `do_handle` (pure, side-effect-free) and `handle` (orchestrates persistence).
 - See `docs/adr/0005-unit-of-work-write-service-split.md`.
 
-## 13. Decision Records
+## 13. Frontend Architecture
+
+### 13.1 Nuxt Layer Model
+
+The frontend is structured as a Nuxt 4 layer (`@white-rabbit/shared`) extended by endpoint apps.
+The shared layer provides components, composables, and pages.
+Endpoint apps (e.g., `endpoint-tauri`, future `endpoint-web`) extend it via `nuxt.config.ts` and supply their own client implementation.
+
+Directory convention for the shared layer:
+- `app/components/` — auto-registered Vue components.
+- `app/composables/` — auto-imported composables.
+- `app/pages/` — file-based routing pages.
+- `models/` — domain types, outside `app/` for package-level exports.
+- `clients/` — client interface, outside `app/` for package-level exports.
+
+### 13.2 Client Abstraction
+
+One `JournalClient` interface with `Promise<T>` returns.
+Each endpoint provides its implementation via a Nuxt plugin (`defineNuxtPlugin` + `provide`).
+Shared composables resolve the client via `useNuxtApp().$journalClient`.
+
+The client interface lives in the shared package so that both the shared composables and endpoint implementations can reference it.
+Endpoint implementations are not in the shared package; they live in each endpoint's own `clients/` directory.
+
+### 13.3 Composable Pattern
+
+Shared composables wrap client reads in `useAsyncData(() => client.method())`, returning `AsyncData<T>`.
+Extending apps can override composables (e.g., replace with `useFetch` for a web endpoint).
+Mutations use the client directly via `useJournalClient()`, calling `refresh()` after writes.
+
+### 13.4 Rendering Modes
+
+- **Tauri** (`endpoint-tauri`): `ssr: false` (SPA). `nuxi generate` outputs static files for the webview.
+- **Web** (future): may use SSR or SSG depending on requirements.
+
+See `docs/adr/0006-nuxt-frontend-client-abstraction.md`.
+
+## 14. Decision Records
 Architecture decisions and trade-offs are recorded in ADRs:
 - See `docs/adr/README.md`
 - See `docs/adr/0001-ddd-dry-run-cqrs-specification.md`
@@ -134,3 +171,4 @@ Architecture decisions and trade-offs are recorded in ADRs:
 - See `docs/adr/0003-in-memory-event-bus-routing.md`
 - See `docs/adr/0004-transaction-boundaries-long-running-processes.md`
 - See `docs/adr/0005-unit-of-work-write-service-split.md`
+- See `docs/adr/0006-nuxt-frontend-client-abstraction.md`

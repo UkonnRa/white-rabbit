@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "packages/endpoint-tauri/src-tauri"]
+members = ["crates/*", "packages/endpoint-tauri/endpoint-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -15,12 +15,12 @@ itertools = "0.14"
 proc-macro2 = "1.0"
 quote = "1.0"
 rust_decimal = { version = "1.40", features = ["serde-str", "macros"] }
-sea-orm = { version = "2.0.0-rc.35", features = ["runtime-tokio", "macros", "with-chrono", "with-json", "with-rust_decimal", "with-uuid"] }
-sea-orm-migration = { version = "2.0.0-rc.35", features = ["runtime-tokio"] }
+sea-orm = { version = "2.0.0-rc.36", features = ["runtime-tokio", "macros", "with-chrono", "with-json", "with-rust_decimal", "with-uuid"] }
+sea-orm-migration = { version = "2.0.0-rc.36", features = ["runtime-tokio"] }
 serde = { version = "1.0", features = ["rc", "derive"] }
 serde_json = "1.0"
 strum = { version = "0.28", features = ["derive"] }
 syn = { version = "2.0", features = ["full"] }
 thiserror = "2.0"
-tokio = { version = "1.49", features = ["full"] }
-uuid = { version = "1.21", features = ["v7"] }
+tokio = { version = "1.50", features = ["full"] }
+uuid = { version = "1.22", features = ["v7"] }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Journal } from "../models";
+import type { Journal } from "../../models";
 
 defineProps<{
   journal: Journal;

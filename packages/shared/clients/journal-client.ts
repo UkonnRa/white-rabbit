@@ -12,3 +12,9 @@ export interface JournalClient {
   update(id: string, request: UpdateJournalRequest): Promise<Journal>;
   delete(id: string): Promise<void>;
 }
+
+declare module "#app" {
+  interface NuxtApp {
+    $journalClient: JournalClient;
+  }
+}

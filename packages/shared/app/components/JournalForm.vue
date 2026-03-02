@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-
-export interface JournalFormData {
-  name: string;
-  description: string;
-  tags: string[];
-}
+import type { JournalFormData } from "../../models";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };

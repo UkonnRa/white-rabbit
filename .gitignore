@@ -8,6 +8,10 @@ dist
 dist-ssr
 *.local
 
+# Nuxt
+.nuxt
+.output
+
 # Yarn (Berry / v4)
 .yarn/cache
 .yarn/install-state.gz

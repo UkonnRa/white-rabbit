@@ -26,3 +26,9 @@ export interface JournalFilter {
   tag?: string;
   fullText?: string;
 }
+
+export interface JournalFormData {
+  name: string;
+  description: string;
+  tags: string[];
+}

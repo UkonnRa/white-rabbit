@@ -21,3 +21,4 @@ This directory stores Architecture Decision Records (ADRs).
 - `0003-in-memory-event-bus-routing.md`
 - `0004-transaction-boundaries-long-running-processes.md`
 - `0005-unit-of-work-write-service-split.md`
+- `0006-nuxt-frontend-client-abstraction.md`
