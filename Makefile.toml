@@ -7,7 +7,7 @@ default_to_workspace = false
 
 [tasks.check-pipx]
 script = '''
-if ! command -v pipx &> /dev/null; then
+if ! command -v pipx > /dev/null 2>&1; then
     echo ""
     echo "ERROR: pipx is not installed."
     echo ""
@@ -24,7 +24,7 @@ fi
 [tasks.install-commitizen]
 dependencies = ["check-pipx"]
 install_script = '''
-if command -v cz &> /dev/null; then
+if command -v cz > /dev/null 2>&1; then
     exit 0
 fi
 pipx install commitizen
@@ -33,7 +33,7 @@ pipx install commitizen
 [tasks.install-pre-commit]
 dependencies = ["check-pipx"]
 install_script = '''
-if command -v pre-commit &> /dev/null; then
+if command -v pre-commit > /dev/null 2>&1; then
     exit 0
 fi
 pipx install pre-commit
