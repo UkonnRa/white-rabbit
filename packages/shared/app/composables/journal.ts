@@ -3,7 +3,9 @@ import type { JournalFilter } from "../../models";
 export function useJournals(filter?: MaybeRef<JournalFilter>) {
   const client = useJournalClient();
   return useAsyncData("journals", () => client.list(toValue(filter)), {
-    watch: filter ? [isRef(filter) ? filter : undefined].filter(Boolean) : undefined,
+    watch: filter
+      ? [isRef(filter) ? filter : undefined].filter(Boolean)
+      : undefined,
   });
 }
 

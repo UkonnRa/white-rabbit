@@ -5,7 +5,7 @@ import pluginVue from "eslint-plugin-vue";
 import json from "@eslint/json";
 import markdown from "@eslint/markdown";
 import css from "@eslint/css";
-import { defineConfig } from "eslint/config";
+import { defineConfig, globalIgnores } from "eslint/config";
 import { fileURLToPath } from "node:url";
 import { includeIgnoreFile } from "@eslint/compat";
 import { Plugin } from "@eslint/core";
@@ -15,17 +15,23 @@ const gitignorePath = fileURLToPath(new URL(".gitignore", import.meta.url));
 
 export default defineConfig([
   includeIgnoreFile(gitignorePath, "Imported .gitignore patterns"),
+  globalIgnores([".yarn"], "Ignore yarn cache directory"),
   {
-    files: ["**/*.{js,mjs,cjs,ts,mts,cts,vue}"],
+    files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
     plugins: { js },
     extends: ["js/recommended"],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   tseslint.configs.recommended,
-  pluginVue.configs["flat/recommended"],
   {
     files: ["**/*.vue"],
-    languageOptions: { parserOptions: { parser: tseslint.parser } },
+    extends: [...pluginVue.configs["flat/recommended"]],
+    languageOptions: {
+      parserOptions: { parser: tseslint.parser },
+    },
+    rules: {
+      "vue/multi-word-component-names": 0,
+    },
   },
   {
     files: ["**/*.json"],

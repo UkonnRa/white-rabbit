@@ -3,11 +3,13 @@
 This directory stores Architecture Decision Records (ADRs).
 
 ## Format
+
 - File name: `NNNN-short-title.md`
 - One decision per file.
 - Keep entries immutable after accepted; supersede with a new ADR when needed.
 
 ## Recommended Template
+
 - Status
 - Context
 - Decision
@@ -16,6 +18,7 @@ This directory stores Architecture Decision Records (ADRs).
 - References
 
 ## Current ADRs
+
 - `0001-ddd-dry-run-cqrs-specification.md`
 - `0002-event-sourcing-dual-write-persistence.md`
 - `0003-in-memory-event-bus-routing.md`

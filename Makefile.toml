@@ -76,11 +76,21 @@ pipx install pre-commit
 # Linting
 # =============================================================================
 
+[tasks.lint-fix-prettier]
+script = "yarn prettier --write ."
+
 [tasks.lint-fix-eslint]
 script = "yarn eslint --fix ."
 
-[tasks.lint-fix-prettier]
-script = "yarn prettier . --write"
+[tasks.lint-fix-frontend]
+run_task = [
+    { name = ["lint-fix-prettier", "lint-fix-eslint"] },
+]
+
+[tasks.lint-fix-md]
+install_crate = { crate_name = "rumdl", binary = "rumdl", test_arg = "--version" }
+command = "rumdl"
+args = ["check", "--fix", "docs/", "AGENTS.md"]
 
 [tasks.lint-fix-rustfmt]
 toolchain = "nightly"
@@ -91,19 +101,19 @@ args = ["fmt"]
 command = "cargo"
 args = ["clippy", "--fix", "--allow-dirty", "--allow-staged"]
 
-[tasks.lint-fix-md]
-install_crate = { crate_name = "rumdl", binary = "rumdl", test_arg = "--version" }
-command = "rumdl"
-args = ["check", "--fix", "docs/", "AGENTS.md"]
-
 [tasks.lint-fix-cargo-sort]
 install_crate = { crate_name = "cargo-sort", binary = "cargo-sort", test_arg = "--version" }
 command = "cargo"
 args = ["sort", "--workspace", "--grouped"]
 
+[tasks.lint-fix-backend]
+run_task = [
+    { name = ["lint-fix-cargo-sort", "lint-fix-rustfmt", "lint-fix-clippy"] },
+]
+
 [tasks.lint-fix]
 run_task = [
-    { name = ["lint-fix-cargo-sort", "lint-fix-rustfmt", "lint-fix-clippy", "lint-fix-md"] },
+    { name = ["lint-fix-frontend", "lint-fix-md", "lint-fix-backend"] },
 ]
 
 # =============================================================================

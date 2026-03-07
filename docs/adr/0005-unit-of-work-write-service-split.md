@@ -53,7 +53,7 @@ specifications against in-memory entities.
 
 A new trait in `shared`:
 
-```
+```rust
 trait SpecificationEvaluator<E: Entity> {
     fn matches(&self, entity: &E) -> bool;
 }

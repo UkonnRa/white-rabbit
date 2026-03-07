@@ -2,7 +2,12 @@
 import type { Journal, JournalFilter, JournalFormData } from "../../models";
 
 const currentFilter = ref<JournalFilter>({});
-const { data: journals, status, error: queryError, refresh } = useJournals(currentFilter);
+const {
+  data: journals,
+  status,
+  error: queryError,
+  refresh,
+} = useJournals(currentFilter);
 
 const client = useJournalClient();
 
@@ -96,9 +101,7 @@ function cancelForm() {
     />
 
     <div v-if="status === 'pending'" class="loading">Loading...</div>
-    <div v-else-if="!journals?.length" class="empty">
-      No journals found.
-    </div>
+    <div v-else-if="!journals?.length" class="empty">No journals found.</div>
     <div v-else class="journal-grid">
       <JournalCard
         v-for="journal in journals"

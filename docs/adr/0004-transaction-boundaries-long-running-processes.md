@@ -76,11 +76,16 @@ Long-held database transactions are prohibited. External I/O must never occur in
 ## Alternatives Considered
 
 1. **Hold transaction open across external calls**
-  - Rejected: causes lock contention, connection pool exhaustion, and MVCC bloat under concurrency. Databases do not support "suspending" a transaction while waiting for external I/O without holding resources.
+
+- Rejected: causes lock contention, connection pool exhaustion, and MVCC bloat under concurrency. Databases do not support "suspending" a transaction while waiting for external I/O without holding resources.
+
 2. **Fire-and-forget event publishing after commit**
-  - Rejected: if the process crashes between commit and publish, events are lost permanently. No delivery guarantee.
+
+- Rejected: if the process crashes between commit and publish, events are lost permanently. No delivery guarantee.
+
 3. **Two-phase commit (2PC) / distributed transactions**
-  - Rejected: not applicable. The system is a single-process, single-database application. 2PC adds complexity without benefit in this context, and is fragile in practice.
+
+- Rejected: not applicable. The system is a single-process, single-database application. 2PC adds complexity without benefit in this context, and is fragile in practice.
 
 ## References
 
@@ -92,4 +97,3 @@ Long-held database transactions are prohibited. External I/O must never occur in
   - [https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/saga/saga](https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/saga/saga)
 - Long-running processes and process managers:
   - [https://www.enterpriseintegrationpatterns.com/patterns/messaging/ProcessManager.html](https://www.enterpriseintegrationpatterns.com/patterns/messaging/ProcessManager.html)
-

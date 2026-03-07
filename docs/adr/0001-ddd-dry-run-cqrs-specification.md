@@ -4,7 +4,9 @@
 - Date: 2026-02-06
 
 ## Context
+
 The system needs to:
+
 - Keep business rules in aggregate boundaries (DDD).
 - Execute the same command logic in real-run and dry-run modes.
 - Prevent irreversible side effects in dry-run while still computing in-transaction reactions.
@@ -13,6 +15,7 @@ The system needs to:
 - Support practical command flows that may include "write-then-query" patterns.
 
 ## Decision
+
 1. **Domain model boundary**
    - Aggregate roots and value objects are the source of business invariants.
    - Infrastructure and persistence details must not own business rules.
@@ -52,7 +55,9 @@ The system needs to:
    - Domain/application layers enrich errors with contextual details for diagnostics and API responses.
 
 ## Consequences
+
 ### Positive
+
 - One command flow supports both execution modes.
 - Dry-run previews are accurate and explainable.
 - Side effects are safer and easier to audit.
@@ -60,11 +65,13 @@ The system needs to:
 - Query intent is reusable even with different storage backends.
 
 ### Negative
+
 - Additional infrastructure complexity (unit of work, event routing, overlay query behavior).
 - Stricter discipline required around side-effect classification.
 - More test surface (mode-specific behavior and event phase behavior).
 
 ## Alternatives Considered
+
 1. **Generic CRUD events only**
    - Rejected: weak business semantics and unclear side-effect routing.
 
@@ -78,6 +85,7 @@ The system needs to:
    - Rejected: semantic duplication and long-term maintenance cost.
 
 ## References
+
 - Domain events and DDD guidance:
   - https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/domain-events-design-implementation
 - CQRS pattern:

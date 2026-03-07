@@ -1,5 +1,5 @@
 {
-    "sonarCloudOrganization": "ukonnra",
-    "projectKey": "UkonnRa_white-rabbit",
-    "region": "EU"
+  "sonarCloudOrganization": "ukonnra",
+  "projectKey": "UkonnRa_white-rabbit",
+  "region": "EU"
 }

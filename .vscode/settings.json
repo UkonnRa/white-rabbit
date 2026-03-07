@@ -1,9 +1,9 @@
 {
-    "files.watcherExclude": {
-        "**/target": true
-    },
-    "sonarlint.connectedMode.project": {
-        "connectionId": "SonarCloud Connection",
-        "projectKey": "UkonnRa_white-rabbit"
-    }
+  "files.watcherExclude": {
+    "**/target": true
+  },
+  "sonarlint.connectedMode.project": {
+    "connectionId": "SonarCloud Connection",
+    "projectKey": "UkonnRa_white-rabbit"
+  }
 }

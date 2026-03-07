@@ -28,7 +28,7 @@ of a `JournalClient` interface. This worked but has limitations in Nuxt:
 and pages. Endpoint apps (`endpoint-tauri`, future `endpoint-web`) extend it
 via `nuxt.config.ts`:
 
-```
+```ts
 extends: ['@white-rabbit/shared']
 ```
 

@@ -1,5 +1,4 @@
 {
-
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
     "target": "ESNext",
