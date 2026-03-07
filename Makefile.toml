@@ -76,6 +76,12 @@ pipx install pre-commit
 # Linting
 # =============================================================================
 
+[tasks.lint-fix-eslint]
+script = "yarn eslint --fix ."
+
+[tasks.lint-fix-prettier]
+script = "yarn prettier . --write"
+
 [tasks.lint-fix-rustfmt]
 toolchain = "nightly"
 command = "cargo"
