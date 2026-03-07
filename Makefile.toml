@@ -21,6 +21,23 @@ if ! command -v pipx > /dev/null 2>&1; then
 fi
 '''
 
+[tasks.check-pipx.windows]
+script = '''
+@echo off
+where pipx >NUL 2>NUL
+if %ERRORLEVEL% EQU 0 exit /b 0
+
+echo.
+echo ERROR: pipx is not installed.
+echo.
+echo Please install pipx first:
+echo   Windows: py -m pip install --user pipx && py -m pipx ensurepath
+echo   pip:     python -m pip install --user pipx && python -m pipx ensurepath
+echo.
+echo See https://github.com/pypa/pipx for details.
+exit /b 1
+'''
+
 [tasks.install-commitizen]
 dependencies = ["check-pipx"]
 install_script = '''
@@ -30,12 +47,28 @@ fi
 pipx install commitizen
 '''
 
+[tasks.install-commitizen.windows]
+install_script = '''
+@echo off
+where cz >NUL 2>NUL
+if %ERRORLEVEL% EQU 0 exit /b 0
+pipx install commitizen
+'''
+
 [tasks.install-pre-commit]
 dependencies = ["check-pipx"]
 install_script = '''
 if command -v pre-commit > /dev/null 2>&1; then
     exit 0
 fi
+pipx install pre-commit
+'''
+
+[tasks.install-pre-commit.windows]
+install_script = '''
+@echo off
+where pre-commit >NUL 2>NUL
+if %ERRORLEVEL% EQU 0 exit /b 0
 pipx install pre-commit
 '''
 
@@ -80,7 +113,7 @@ args = ["tauri", "${@}"]
 # Commit
 # =============================================================================
 
-[tasks.commit]
+[tasks.cz]
 dependencies = ["install-commitizen"]
 command = "cz"
 args = ["commit"]
@@ -98,8 +131,11 @@ install_crate = { crate_name = "cargo-edit", binary = "cargo-upgrade", test_arg 
 command = "cargo"
 args = ["upgrade", "--incompatible", "--pinned"]
 
+[tasks.upgrade-yarn]
+script = "yarn upgrade-interactive"
+
 [tasks.upgrade-pipx]
-dependencies = ["check-pipx"]
+dependencies = ["check-pipx", "install-commitizen", "install-pre-commit"]
 script = '''
 pipx upgrade commitizen || true
 pipx upgrade pre-commit || true
@@ -107,5 +143,5 @@ pipx upgrade pre-commit || true
 
 [tasks.upgrade]
 run_task = [
-    { name = ["upgrade-1", "upgrade-2", "upgrade-pipx"] },
+    { name = ["upgrade-1", "upgrade-2", "upgrade-yarn", "upgrade-pipx"] },
 ]
