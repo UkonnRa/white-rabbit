@@ -28,10 +28,12 @@ impl TryFrom<CostInput> for Cost {
     fn try_from(value: CostInput) -> Result<Self> {
         if let Ok(date) = value.0.parse() {
             Ok(Cost::Date(date))
-        } else if let Ok(reference) = value.0.parse() {
-            Ok(Cost::Reference(reference))
+        } else if let Ok(amount) = AmountInput(value.0.clone()).try_into() {
+            Ok(Cost::Price(amount))
         } else {
-            Ok(Cost::Price(AmountInput(value.0).try_into()?))
+            Ok(Cost::Reference(
+                value.0.parse().map_err(|e: shared::Error| e.convert())?,
+            ))
         }
     }
 }

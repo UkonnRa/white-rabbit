@@ -138,16 +138,16 @@ pub async fn list_journals(
 fn build_self_href(params: &JournalFilterParams) -> String {
     let mut parts = Vec::new();
     if let Some(id) = &params.id {
-        parts.push(format!("filter[id]={id}"));
+        parts.push(format!("filter[id]={}", urlencoding::encode(id)));
     }
     if let Some(name) = &params.name {
-        parts.push(format!("filter[name]={name}"));
+        parts.push(format!("filter[name]={}", urlencoding::encode(name)));
     }
     if let Some(tag) = &params.tag {
-        parts.push(format!("filter[tag]={tag}"));
+        parts.push(format!("filter[tag]={}", urlencoding::encode(tag)));
     }
     if let Some(ft) = &params.full_text {
-        parts.push(format!("filter[fullText]={ft}"));
+        parts.push(format!("filter[fullText]={}", urlencoding::encode(ft)));
     }
     if parts.is_empty() {
         "/journals".to_string()

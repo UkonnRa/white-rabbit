@@ -22,9 +22,7 @@ async fn main() {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(|origin, _| {
             let host = origin.as_bytes();
-            host.starts_with(b"http://localhost")
-                || host.starts_with(b"http://127.0.0.1")
-                || host.starts_with(b"http://0.0.0.0")
+            host.starts_with(b"http://localhost") || host.starts_with(b"http://127.0.0.1")
         }))
         .allow_methods(tower_http::cors::Any)
         .allow_headers(tower_http::cors::Any);

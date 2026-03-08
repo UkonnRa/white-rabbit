@@ -14,7 +14,6 @@ pub use value::*;
 use crate::record::event::RecordEvent;
 use crate::{account::AccountType, journal::JournalId};
 use chrono::{DateTime, NaiveDate, Utc};
-use itertools::Itertools;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use shared::{AggregateRoot, DomainModel, NonEmpty};
@@ -85,18 +84,14 @@ impl Record {
     pub fn is_balanced(&self) -> Option<bool> {
         match &self.items {
             RecordItems::Transactions(transactions) => {
-                let group_by_type = transactions
-                    .iter()
-                    .chunk_by(|transaction| transaction.account_type)
-                    .into_iter()
-                    .map(|(account_type, transactions)| {
-                        let total_amount = transactions
-                            .into_iter()
-                            .map(|transaction| transaction.amount_number())
-                            .sum();
-                        (account_type, total_amount)
-                    })
-                    .collect::<HashMap<AccountType, Decimal>>();
+                let group_by_type = transactions.iter().fold(
+                    HashMap::new(),
+                    |mut acc: HashMap<AccountType, Decimal>, transaction| {
+                        *acc.entry(transaction.account_type).or_insert(Decimal::ZERO) +=
+                            transaction.amount_number();
+                        acc
+                    },
+                );
                 let total_assets = group_by_type
                     .get(&AccountType::Asset)
                     .unwrap_or(&Decimal::ZERO);

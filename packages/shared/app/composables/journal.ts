@@ -11,5 +11,7 @@ export function useJournals(filter?: MaybeRef<JournalFilter>) {
 
 export function useJournal(id: MaybeRef<string>) {
   const client = useJournalClient();
-  return useAsyncData(`journal:${toValue(id)}`, () => client.get(toValue(id)));
+  return useAsyncData(`journal:${toValue(id)}`, () => client.get(toValue(id)), {
+    watch: [isRef(id) ? id : undefined].filter(Boolean),
+  });
 }

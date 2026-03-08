@@ -459,31 +459,37 @@ impl<R: AccountRepository> WriteService<AccountCommand> for AccountService<R> {
 
         match result {
             Ok(()) => {
-                let entities = uow.entities::<Account>();
                 let events = uow.events::<AccountEvent>();
+                let mut saved_entities = Vec::new();
 
                 if let Some(cs) = uow.take_change_set::<Account>() {
                     if !cs.deleted.is_empty() {
                         let ids: Vec<_> = cs.deleted.into_iter().collect();
-                        self.repository
-                            .delete_all_by_ids(sess, &ids)
-                            .await
-                            .map_err(|e| e.convert())?;
+                        if let Err(e) = self.repository.delete_all_by_ids(sess, &ids).await {
+                            let _ = sess.rollback().await;
+                            return Err(e.convert());
+                        }
                     }
 
                     let to_save: Vec<_> =
                         cs.new.into_values().chain(cs.dirty.into_values()).collect();
                     if !to_save.is_empty() {
-                        self.repository
-                            .save_all(sess, &to_save)
-                            .await
-                            .map_err(|e| e.convert())?;
+                        match self.repository.save_all(sess, &to_save).await {
+                            Ok(saved) => saved_entities = saved.into_values().collect(),
+                            Err(e) => {
+                                let _ = sess.rollback().await;
+                                return Err(e.convert());
+                            }
+                        }
                     }
                 }
 
                 sess.commit().await.map_err(|e| e.convert())?;
 
-                Ok(HandleResult { entities, events })
+                Ok(HandleResult {
+                    entities: saved_entities,
+                    events,
+                })
             }
             Err(e) => {
                 let _ = sess.rollback().await;
