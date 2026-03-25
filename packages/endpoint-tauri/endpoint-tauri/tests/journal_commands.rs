@@ -28,7 +28,7 @@ async fn invoke(
         get_ipc_response(
             &webview,
             InvokeRequest {
-                cmd: cmd.into(),
+                cmd,
                 callback: CallbackFn(0),
                 error: CallbackFn(1),
                 url: "http://tauri.localhost".parse().unwrap(),

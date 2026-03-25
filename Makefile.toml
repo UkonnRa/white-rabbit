@@ -82,9 +82,12 @@ script = "yarn prettier --write ."
 [tasks.lint-fix-eslint]
 script = "yarn eslint --fix ."
 
+[tasks.lint-fix-tsc]
+script = "yarn workspaces foreach -Rpt --from '@white-rabbit/*' run typecheck"
+
 [tasks.lint-fix-frontend]
 run_task = [
-    { name = ["lint-fix-prettier", "lint-fix-eslint"] },
+    { name = ["lint-fix-prettier", "lint-fix-eslint", "lint-fix-tsc"] },
 ]
 
 [tasks.lint-fix-md]

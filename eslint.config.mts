@@ -47,9 +47,17 @@ export default defineConfig([
   },
   {
     files: ["**/*.css"],
+    // @eslint/css cannot parse Tailwind v4 directives (@custom-variant, @theme inline, @apply)
+    ignores: ["**/tailwind.css"],
     plugins: { css: css as Plugin },
     language: "css/css",
     extends: ["css/recommended"],
+  },
+  {
+    files: ["**/components/JournalTable.vue"],
+    rules: {
+      "vue/valid-v-slot": ["error", { allowModifiers: true }],
+    },
   },
   eslintConfigPrettier,
 ]);

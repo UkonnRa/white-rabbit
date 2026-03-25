@@ -4,6 +4,6 @@ export type {
   UpdateJournalRequest,
   JournalFilter,
   JournalFormData,
-} from "./models";
+} from "./app/models";
 
-export type { JournalClient } from "./clients";
+export type { JournalClient } from "./app/clients";

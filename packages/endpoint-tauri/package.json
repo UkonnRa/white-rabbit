@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "typecheck": "nuxi typecheck",
     "dev": "nuxi dev",
     "build": "nuxi generate",
     "preview": "nuxi preview",

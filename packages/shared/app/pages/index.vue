@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Journal, JournalFilter, JournalFormData } from "../../models";
+import type { JournalFilter, JournalFormData, Journal } from "~/models";
 
 const currentFilter = ref<JournalFilter>({});
 const {
@@ -11,35 +11,28 @@ const {
 
 const client = useJournalClient();
 
-const showCreateForm = ref(false);
-const editingJournal = ref<Journal | null>(null);
+const addingNew = ref(false);
 const mutationError = ref<string | null>(null);
 
 const displayError = computed(
   () => mutationError.value ?? queryError.value?.message ?? null,
 );
 
-function handleFilter(filter: JournalFilter) {
-  currentFilter.value = filter;
-}
-
 async function handleCreate(data: JournalFormData) {
   mutationError.value = null;
   try {
     await client.create(data);
-    showCreateForm.value = false;
+    addingNew.value = false;
     await refresh();
   } catch (e) {
     mutationError.value = String(e);
   }
 }
 
-async function handleUpdate(data: JournalFormData) {
-  if (!editingJournal.value) return;
+async function handleUpdate(id: string, data: JournalFormData) {
   mutationError.value = null;
   try {
-    await client.update(editingJournal.value.id, data);
-    editingJournal.value = null;
+    await client.update(id, data);
     await refresh();
   } catch (e) {
     mutationError.value = String(e);
@@ -55,61 +48,37 @@ async function handleDelete(journal: Journal) {
     mutationError.value = String(e);
   }
 }
-
-function startEdit(journal: Journal) {
-  editingJournal.value = journal;
-  showCreateForm.value = false;
-}
-
-function startCreate() {
-  showCreateForm.value = true;
-  editingJournal.value = null;
-}
-
-function cancelForm() {
-  showCreateForm.value = false;
-  editingJournal.value = null;
-}
 </script>
 
 <template>
-  <div class="journal-list-page">
-    <div class="page-header">
-      <h1>Journals</h1>
-      <button @click="startCreate">+ New Journal</button>
+  <div class="d-flex flex-column ga-4">
+    <div class="d-flex align-center justify-space-between">
+      <h1 class="text-h5 font-weight-bold">Journals</h1>
+      <v-btn
+        color="primary"
+        :disabled="addingNew"
+        prepend-icon="mdi-plus"
+        @click="addingNew = true"
+      >
+        New Journal
+      </v-btn>
     </div>
 
-    <div v-if="displayError" class="error">{{ displayError }}</div>
+    <v-alert v-if="displayError" type="error" variant="tonal" closable>
+      {{ displayError }}
+    </v-alert>
 
-    <JournalFilterBar @search="handleFilter" />
-
-    <JournalForm
-      v-if="showCreateForm"
-      @submit="handleCreate"
-      @cancel="cancelForm"
-    />
-
-    <JournalForm
-      v-if="editingJournal"
-      :initial="{
-        name: editingJournal.name,
-        description: editingJournal.description,
-        tags: editingJournal.tags,
-      }"
-      @submit="handleUpdate"
-      @cancel="cancelForm"
-    />
-
-    <div v-if="status === 'pending'" class="loading">Loading...</div>
-    <div v-else-if="!journals?.length" class="empty">No journals found.</div>
-    <div v-else class="journal-grid">
-      <JournalCard
-        v-for="journal in journals"
-        :key="journal.id"
-        :journal="journal"
-        @edit="startEdit"
-        @delete="handleDelete"
-      />
+    <div v-if="status === 'pending'" class="text-center text-medium-emphasis">
+      Loading...
     </div>
+    <JournalTable
+      v-else
+      :journals="journals ?? []"
+      :adding-new="addingNew"
+      @create="handleCreate"
+      @update="handleUpdate"
+      @delete="handleDelete"
+      @cancel-new="addingNew = false"
+    />
   </div>
 </template>

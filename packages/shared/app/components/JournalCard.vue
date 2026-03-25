@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Journal } from "../../models";
+import type { Journal } from "~/models";
 
 defineProps<{
   journal: Journal;
@@ -12,19 +12,40 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="journal-card">
-    <div class="journal-card-header">
-      <h3>{{ journal.name }}</h3>
-      <div class="journal-card-actions">
-        <UiButton @click="$emit('edit', journal)">Edit</UiButton>
-        <UiButton @click="$emit('delete', journal)">Delete</UiButton>
+  <v-card class="d-flex flex-column">
+    <v-card-item>
+      <div class="d-flex align-start justify-space-between ga-2">
+        <v-card-title class="text-body-1 font-weight-medium">
+          {{ journal.name }}
+        </v-card-title>
+        <div class="d-flex ga-1 shrink-0">
+          <v-btn
+            variant="outlined"
+            size="small"
+            @click="$emit('edit', journal)"
+          >
+            Edit
+          </v-btn>
+          <v-btn color="error" size="small" @click="$emit('delete', journal)">
+            Delete
+          </v-btn>
+        </div>
       </div>
-    </div>
-    <p v-if="journal.description" class="journal-description">
-      {{ journal.description }}
-    </p>
-    <div v-if="journal.tags.length" class="tags">
-      <span v-for="tag in journal.tags" :key="tag" class="tag">{{ tag }}</span>
-    </div>
-  </div>
+      <v-card-subtitle v-if="journal.description" class="px-0 mt-1">
+        {{ journal.description }}
+      </v-card-subtitle>
+    </v-card-item>
+    <v-card-text v-if="journal.tags.length" class="mt-auto pt-0">
+      <div class="d-flex flex-wrap ga-1">
+        <v-chip
+          v-for="tag in journal.tags"
+          :key="tag"
+          size="small"
+          variant="tonal"
+        >
+          {{ tag }}
+        </v-chip>
+      </div>
+    </v-card-text>
+  </v-card>
 </template>

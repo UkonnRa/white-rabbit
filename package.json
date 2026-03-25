@@ -6,10 +6,10 @@
   "packageManager": "yarn@4.12.0",
   "devDependencies": {
     "@eslint/compat": "^2.0.3",
-    "@eslint/css": "^1.0.0",
+    "@eslint/css": "^1.1.0",
     "@eslint/js": "^10.0.1",
     "@eslint/json": "^1.2.0",
-    "@eslint/markdown": "^7.5.1",
+    "@eslint/markdown": "^8.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^25.5.0",
     "eslint": "^10.1.0",
@@ -17,9 +17,11 @@
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.4.0",
     "jiti": "^2.6.1",
+    "nuxi": "^3.34.0",
     "prettier": "^3.8.1",
+    "sass-embedded": "^1.98.0",
     "tailwindcss": "^4.2.2",
-    "typescript-eslint": "^8.57.2",
+    "typescript-eslint": "^8.58.0",
     "vue-eslint-parser": "^10.4.0"
   }
 }

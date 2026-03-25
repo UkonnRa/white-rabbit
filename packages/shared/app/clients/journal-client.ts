@@ -3,7 +3,7 @@ import type {
   CreateJournalRequest,
   UpdateJournalRequest,
   JournalFilter,
-} from "../models";
+} from "~/models";
 
 export interface JournalClient {
   create(request: CreateJournalRequest): Promise<Journal>;

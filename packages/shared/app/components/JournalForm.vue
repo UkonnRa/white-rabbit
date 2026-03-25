@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { JournalFormData } from "../../models";
+import type { JournalFormData } from "~/models";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };
@@ -12,64 +12,77 @@ const emit = defineEmits<{
 
 const name = ref(props.initial?.name ?? "");
 const description = ref(props.initial?.description ?? "");
-const tagsInput = ref(props.initial?.tags?.join(", ") ?? "");
+const tags = ref<string[]>(props.initial?.tags ?? []);
 
 watch(
   () => props.initial,
   (val) => {
     name.value = val?.name ?? "";
     description.value = val?.description ?? "";
-    tagsInput.value = val?.tags?.join(", ") ?? "";
+    tags.value = val?.tags ?? [];
   },
 );
 
 function handleSubmit() {
-  const tags = tagsInput.value
-    .split(",")
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-
   emit("submit", {
     name: name.value,
     description: description.value,
-    tags,
+    tags: tags.value,
   });
 }
 </script>
 
 <template>
-  <form class="journal-form" @submit.prevent="handleSubmit">
-    <div class="field">
-      <label for="journal-name">Name</label>
-      <input
-        id="journal-name"
-        v-model="name"
-        type="text"
-        required
-        placeholder="Journal name"
-      />
-    </div>
-    <div class="field">
-      <label for="journal-description">Description</label>
-      <textarea
-        id="journal-description"
-        v-model="description"
-        placeholder="Optional description"
-        rows="3"
-      />
-    </div>
-    <div class="field">
-      <label for="journal-tags">Tags</label>
-      <input
-        id="journal-tags"
-        v-model="tagsInput"
-        type="text"
-        placeholder="Comma-separated tags"
-      />
-    </div>
-    <div class="actions">
-      <UiButton type="submit">{{ initial ? "Update" : "Create" }}</UiButton>
-      <UiButton type="button" @click="$emit('cancel')">Cancel</UiButton>
-    </div>
-  </form>
+  <v-card>
+    <v-card-title class="pt-4 px-4">
+      {{ initial ? "Edit Journal" : "New Journal" }}
+    </v-card-title>
+    <v-card-text>
+      <form class="d-flex flex-column ga-4" @submit.prevent="handleSubmit">
+        <v-text-field
+          id="journal-name"
+          v-model="name"
+          label="Name"
+          required
+          placeholder="Journal name"
+          variant="outlined"
+          density="compact"
+        />
+        <v-textarea
+          id="journal-description"
+          v-model="description"
+          label="Description"
+          placeholder="Optional description"
+          variant="outlined"
+          density="compact"
+          :rows="3"
+        />
+        <v-combobox
+          id="journal-tags"
+          v-model="tags"
+          :delimiters="[',', ' ']"
+          label="Tags"
+          multiple
+          chips
+          closable-chips
+          placeholder="tag1, tag2…"
+          variant="outlined"
+          density="compact"
+        />
+        <div class="d-flex justify-end ga-2">
+          <v-btn
+            type="button"
+            variant="outlined"
+            prepend-icon="mdi-close"
+            @click="$emit('cancel')"
+          >
+            Cancel
+          </v-btn>
+          <v-btn type="submit" prepend-icon="mdi-content-save">
+            {{ initial ? "Update" : "Create" }}
+          </v-btn>
+        </div>
+      </form>
+    </v-card-text>
+  </v-card>
 </template>
