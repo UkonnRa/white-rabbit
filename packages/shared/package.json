@@ -6,11 +6,21 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "dependencies": {
-    "vue": "^3.5.30"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^1.0.0",
+    "reka-ui": "^2.9.2",
+    "tailwind-merge": "^3.5.0",
+    "vue": "^3.5.31"
   },
   "devDependencies": {
     "@nuxt/eslint": "1.15.2",
-    "nuxt": "^4.3.1",
-    "typescript": "~5.9.3"
+    "@tailwindcss/vite": "^4.2.2",
+    "@vueuse/nuxt": "14.2.1",
+    "nuxt": "^4.4.2",
+    "shadcn-nuxt": "2.4.3",
+    "tailwindcss": "^4.2.2",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "~6.0.2"
   }
 }

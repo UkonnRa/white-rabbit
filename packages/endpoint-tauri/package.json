@@ -13,11 +13,13 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "@white-rabbit/shared": "workspace:*",
-    "vue": "^3.5.30"
+    "vue": "^3.5.31"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2.10.1",
-    "nuxt": "^4.3.1",
-    "typescript": "~5.9.3"
+    "nuxt": "^4.4.2",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~6.0.2"
   }
 }

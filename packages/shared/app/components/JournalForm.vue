@@ -68,8 +68,8 @@ function handleSubmit() {
       />
     </div>
     <div class="actions">
-      <button type="submit">{{ initial ? "Update" : "Create" }}</button>
-      <button type="button" @click="$emit('cancel')">Cancel</button>
+      <UiButton type="submit">{{ initial ? "Update" : "Create" }}</UiButton>
+      <UiButton type="button" @click="$emit('cancel')">Cancel</UiButton>
     </div>
   </form>
 </template>

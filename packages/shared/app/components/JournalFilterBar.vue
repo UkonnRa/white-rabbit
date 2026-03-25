@@ -30,7 +30,7 @@ function handleClear() {
     <input v-model="fullText" type="text" placeholder="Search..." />
     <input v-model="name" type="text" placeholder="Filter by name" />
     <input v-model="tag" type="text" placeholder="Filter by tag" />
-    <button type="submit">Search</button>
-    <button type="button" @click="handleClear">Clear</button>
+    <UiButton type="submit">Search</UiButton>
+    <UiButton type="button" @click="handleClear">Clear</UiButton>
   </form>
 </template>

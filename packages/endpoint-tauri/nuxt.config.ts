@@ -3,5 +3,5 @@ export default defineNuxtConfig({
   extends: ["@white-rabbit/shared"],
   ssr: false,
   devServer: { port: 1420 },
-  devtools: { enabled: false },
+  devtools: { enabled: true },
 });

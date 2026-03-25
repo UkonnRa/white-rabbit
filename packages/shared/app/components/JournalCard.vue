@@ -16,8 +16,8 @@ defineEmits<{
     <div class="journal-card-header">
       <h3>{{ journal.name }}</h3>
       <div class="journal-card-actions">
-        <button @click="$emit('edit', journal)">Edit</button>
-        <button @click="$emit('delete', journal)">Delete</button>
+        <UiButton @click="$emit('edit', journal)">Edit</UiButton>
+        <UiButton @click="$emit('delete', journal)">Delete</UiButton>
       </div>
     </div>
     <p v-if="journal.description" class="journal-description">
