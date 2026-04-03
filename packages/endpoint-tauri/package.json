@@ -14,7 +14,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "@white-rabbit/shared": "workspace:*",
-    "vue": "^3.5.31"
+    "vue": "^3.5.32"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",

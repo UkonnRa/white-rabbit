@@ -1,4 +1,4 @@
-import { buildTheme, DEFAULT_SEED } from "~/composables/useAppTheme";
+import { buildTheme, DEFAULT_SEED } from "../composables/useAppTheme";
 import { createVuetify } from "vuetify";
 
 // Restore persisted seed so initial render matches the saved color

@@ -38,7 +38,7 @@ impl<R: AccountRepository> AccountService<R> {
     ///   names among siblings.
     /// - [`ErrorKind::Shared(NonEmpty)`](shared::ErrorKind::NonEmpty) — empty name.
     async fn do_create(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         commands: Vec<AccountCommandCreate>,
@@ -61,7 +61,7 @@ impl<R: AccountRepository> AccountService<R> {
 
         let parent_ids: Vec<_> = commands.iter().map(|c| c.parent_id.clone()).collect();
         let parents = uow
-            .find_all_by_ids::<Account, AccountSpecification, R>(repo, sess, &parent_ids)
+            .find_all_by_ids(self.repository.as_ref(), sess, &parent_ids)
             .await
             .map_err(|e| e.convert())?;
 
@@ -100,7 +100,7 @@ impl<R: AccountRepository> AccountService<R> {
             let spec = AccountSpecification::parent_id((*parent_id).clone())
                 & AccountSpecification::names(new_names.iter().copied());
             if let Some(existing) = uow
-                .find_one::<Account, AccountSpecification, R>(repo, sess, &spec)
+                .find_one(self.repository.as_ref(), sess, &spec)
                 .await
                 .map_err(|e| e.convert())?
             {
@@ -175,8 +175,8 @@ impl<R: AccountRepository> AccountService<R> {
     }
 
     async fn validate_update_name_conflicts(
+        &self,
         uow: &UnitOfWork,
-        repo: &R,
         sess: &R::Session,
         commands: &[AccountCommandUpdate],
         existing: &HashMap<AccountId, Account>,
@@ -193,7 +193,7 @@ impl<R: AccountRepository> AccountService<R> {
             let spec = AccountSpecification::parent_id(parent_id.clone())
                 & AccountSpecification::name(&cmd.name);
             let conflicts = uow
-                .find_all::<Account, AccountSpecification, R>(repo, sess, &spec, None)
+                .find_all(self.repository.as_ref(), sess, &spec, None)
                 .await
                 .map_err(|e| e.convert())?;
             for (conflict_id, conflict) in &conflicts {
@@ -258,7 +258,7 @@ impl<R: AccountRepository> AccountService<R> {
     /// - [`ErrorKind::Shared(Conflict)`](shared::ErrorKind::Conflict)
     ///   — name is reserved.
     async fn do_update(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         commands: Vec<AccountCommandUpdate>,
@@ -273,7 +273,7 @@ impl<R: AccountRepository> AccountService<R> {
 
         let id_vec: Vec<_> = commands.iter().map(|c| c.id.clone()).collect();
         let existing = uow
-            .find_all_by_ids::<Account, AccountSpecification, R>(repo, sess, &id_vec)
+            .find_all_by_ids(self.repository.as_ref(), sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -287,7 +287,7 @@ impl<R: AccountRepository> AccountService<R> {
             }
         }
 
-        Self::validate_update_name_conflicts(uow, repo, sess, &commands, &existing, &batch_ids)
+        self.validate_update_name_conflicts(uow, sess, &commands, &existing, &batch_ids)
             .await?;
 
         let commands_by_id: HashMap<_, _> =
@@ -313,7 +313,7 @@ impl<R: AccountRepository> AccountService<R> {
     /// Cascades: all descendants are deleted too. Duplicate and nonexistent
     /// IDs are silently ignored.
     async fn do_delete(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         ids: HashSet<AccountId>,
@@ -328,7 +328,7 @@ impl<R: AccountRepository> AccountService<R> {
         while !frontier.is_empty() {
             let spec = AccountSpecification::parent_ids(frontier.iter().cloned());
             let children = uow
-                .find_all::<Account, AccountSpecification, R>(repo, sess, &spec, None)
+                .find_all(self.repository.as_ref(), sess, &spec, None)
                 .await
                 .map_err(|e| e.convert())?;
             frontier = children
@@ -351,7 +351,7 @@ impl<R: AccountRepository> AccountService<R> {
     /// Sets `archived_at` on the specified accounts and all descendants.
     /// Already-archived accounts are silently skipped.
     async fn do_archive(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         command: AccountCommandArchive,
@@ -366,7 +366,7 @@ impl<R: AccountRepository> AccountService<R> {
         while !frontier.is_empty() {
             let spec = AccountSpecification::parent_ids(frontier.iter().cloned());
             let children = uow
-                .find_all::<Account, AccountSpecification, R>(repo, sess, &spec, None)
+                .find_all(self.repository.as_ref(), sess, &spec, None)
                 .await
                 .map_err(|e| e.convert())?;
             frontier = children
@@ -378,7 +378,7 @@ impl<R: AccountRepository> AccountService<R> {
 
         let ids_vec: Vec<_> = all_ids.into_iter().collect();
         let existing = uow
-            .find_all_by_ids::<Account, AccountSpecification, R>(repo, sess, &ids_vec)
+            .find_all_by_ids(self.repository.as_ref(), sess, &ids_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -403,17 +403,17 @@ impl<R: AccountRepository> AccountService<R> {
     ///
     /// Order: **delete → archive → create → update**.
     async fn do_batch(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         command: AccountCommandBatch,
     ) -> Result<()> {
-        Self::do_delete(repo, sess, uow, command.delete).await?;
+        self.do_delete(sess, uow, command.delete).await?;
         for archive_cmd in command.archive {
-            Self::do_archive(repo, sess, uow, archive_cmd).await?;
+            self.do_archive(sess, uow, archive_cmd).await?;
         }
-        Self::do_create(repo, sess, uow, command.create).await?;
-        Self::do_update(repo, sess, uow, command.update).await?;
+        self.do_create(sess, uow, command.create).await?;
+        self.do_update(sess, uow, command.update).await?;
         Ok(())
     }
 }
@@ -432,17 +432,11 @@ impl<R: AccountRepository> WriteService<AccountCommand> for AccountService<R> {
         command: AccountCommand,
     ) -> Result<()> {
         match command {
-            AccountCommand::Create(cmd) => {
-                Self::do_create(&self.repository, sess, uow, vec![cmd]).await
-            }
-            AccountCommand::Update(cmd) => {
-                Self::do_update(&self.repository, sess, uow, vec![cmd]).await
-            }
-            AccountCommand::Delete(ids) => Self::do_delete(&self.repository, sess, uow, ids).await,
-            AccountCommand::Archive(cmd) => {
-                Self::do_archive(&self.repository, sess, uow, cmd).await
-            }
-            AccountCommand::Batch(cmd) => Self::do_batch(&self.repository, sess, uow, cmd).await,
+            AccountCommand::Create(cmd) => self.do_create(sess, uow, vec![cmd]).await,
+            AccountCommand::Update(cmd) => self.do_update(sess, uow, vec![cmd]).await,
+            AccountCommand::Delete(ids) => self.do_delete(sess, uow, ids).await,
+            AccountCommand::Archive(cmd) => self.do_archive(sess, uow, cmd).await,
+            AccountCommand::Batch(cmd) => self.do_batch(sess, uow, cmd).await,
         }
     }
 

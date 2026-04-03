@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tauri Development Debug",
+      "cargo": {
+        "args": [
+          "build",
+          "--manifest-path=./packages/endpoint-tauri/endpoint-tauri/Cargo.toml",
+          "--no-default-features"
+        ]
+      },
+      "preLaunchTask": "ui:dev"
+    },
+    {
+      "type": "cppvsdbg",
+      "request": "launch",
+      "name": "Tauri Development Debug (Windows)",
+      "program": "${workspaceRoot}/target/debug/endpoint-tauri.exe",
+      "cwd": "${workspaceRoot}",
+      "preLaunchTask": "dev:windows"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Tauri Production Debug",
+      "cargo": {
+        "args": [
+          "build",
+          "--release",
+          "--manifest-path=./packages/endpoint-tauri/endpoint-tauri/Cargo.toml"
+        ]
+      },
+      "preLaunchTask": "ui:build"
+    }
+  ]
+}

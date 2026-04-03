@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ui:dev",
+      "type": "shell",
+      "isBackground": true,
+      "command": "yarn",
+      "args": ["workspace", "@white-rabbit/endpoint-tauri", "dev"],
+      "problemMatcher": {
+        "owner": "nuxt",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Nuxt",
+          "endsPattern": "Local:"
+        }
+      }
+    },
+    {
+      "label": "dev:windows",
+      "dependsOn": ["cargo:build-debug", "ui:dev"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo:build-debug",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "build",
+        "--manifest-path",
+        "${workspaceRoot}/packages/endpoint-tauri/endpoint-tauri/Cargo.toml"
+      ],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "ui:build",
+      "type": "shell",
+      "command": "yarn",
+      "args": ["workspace", "@white-rabbit/endpoint-tauri", "build"],
+      "problemMatcher": []
+    }
+  ]
+}

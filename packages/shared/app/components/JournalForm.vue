@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { JournalFormData } from "~/models";
+import type { JournalFormData } from "../models";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };

@@ -1,4 +1,4 @@
-import type { JournalFilter } from "~/models";
+import type { JournalFilter } from "../models";
 
 export function useJournals(filter?: MaybeRef<JournalFilter>) {
   const client = useJournalClient();

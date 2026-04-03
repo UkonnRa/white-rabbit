@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { JournalFilter, JournalFormData, Journal } from "~/models";
+import type { JournalFilter, JournalFormData, Journal } from "../models";
 
 const currentFilter = ref<JournalFilter>({});
 const {

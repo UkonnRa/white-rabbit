@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Journal, JournalFormData } from "~/models";
+import type { Journal, JournalFormData } from "../models";
 
 const props = defineProps<{
   journals: Journal[];

@@ -12,11 +12,7 @@ export default defineNuxtConfig({
   },
   css: ["~/assets/css/tailwind.css"],
   vite: {
-    plugins: [
-      tailwindcss(),
-      // @ts-expect-error vite-plugin-vuetify type mismatch with nuxt vite plugin array
-      vuetify({ autoImport: true }),
-    ],
+    plugins: [tailwindcss(), vuetify({ autoImport: true })],
     vue: {
       template: {
         transformAssetUrls,

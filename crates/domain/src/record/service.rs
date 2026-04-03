@@ -1,7 +1,6 @@
 use chrono::Utc;
 
 use crate::account::repository::AccountRepository;
-use crate::account::specification::AccountSpecification;
 use crate::account::{Account, AccountId};
 use crate::error::Result;
 use crate::record::command::{
@@ -9,7 +8,6 @@ use crate::record::command::{
 };
 use crate::record::event::{RecordCreated, RecordDeleted, RecordEvent, RecordUpdated};
 use crate::record::repository::RecordRepository;
-use crate::record::specification::RecordSpecification;
 use crate::record::{
     AmountInput, CostInput, Record, RecordId, RecordInput, RecordItemInput, RecordItemKind,
 };
@@ -37,7 +35,7 @@ where
     ///
     /// Balance is NOT enforced — [`Record::is_balanced`] remains advisory.
     async fn do_create(
-        account_repo: &AR,
+        &self,
         uow: &mut UnitOfWork,
         sess: &R::Session,
         commands: Vec<RecordCommandCreate>,
@@ -49,15 +47,9 @@ where
         let now = Utc::now();
 
         for cmd in commands {
-            let item_inputs = Self::resolve_items(
-                account_repo,
-                uow,
-                sess,
-                &cmd.journal_id,
-                cmd.kind,
-                &cmd.items,
-            )
-            .await?;
+            let item_inputs = self
+                .resolve_items(uow, sess, &cmd.journal_id, cmd.kind, &cmd.items)
+                .await?;
 
             let input = RecordInput {
                 journal_id: cmd.journal_id,
@@ -97,8 +89,7 @@ where
     ///   lookup accounts, fill types).
     /// - `journal_id` and `kind` are immutable after creation.
     async fn do_update(
-        repo: &R,
-        account_repo: &AR,
+        &self,
         uow: &mut UnitOfWork,
         sess: &R::Session,
         commands: Vec<RecordCommandUpdate>,
@@ -119,7 +110,7 @@ where
 
         let id_vec: Vec<_> = commands.iter().map(|c| c.id.clone()).collect();
         let existing = uow
-            .find_all_by_ids::<Record, RecordSpecification, R>(repo, sess, &id_vec)
+            .find_all_by_ids(self.repository.as_ref(), sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -146,7 +137,7 @@ where
             };
 
             let item_inputs = if let Some(new_items) = &cmd.items {
-                Self::resolve_items(account_repo, uow, sess, &record.journal_id, kind, new_items)
+                self.resolve_items(uow, sess, &record.journal_id, kind, new_items)
                     .await?
             } else {
                 Self::items_to_inputs(record)
@@ -203,15 +194,14 @@ where
     ///
     /// Order: **delete → create → update**.
     async fn do_batch(
-        repo: &R,
-        account_repo: &AR,
+        &self,
         uow: &mut UnitOfWork,
         sess: &R::Session,
         command: RecordCommandBatch,
     ) -> Result<()> {
         Self::do_delete(uow, command.delete).await?;
-        Self::do_create(account_repo, uow, sess, command.create).await?;
-        Self::do_update(repo, account_repo, uow, sess, command.update).await?;
+        self.do_create(uow, sess, command.create).await?;
+        self.do_update(uow, sess, command.update).await?;
         Ok(())
     }
 
@@ -219,7 +209,7 @@ where
 
     /// Parse command items, look up accounts, validate, and build [`RecordItemInput`]s.
     async fn resolve_items(
-        account_repo: &AR,
+        &self,
         uow: &UnitOfWork,
         sess: &R::Session,
         journal_id: &crate::journal::JournalId,
@@ -228,7 +218,7 @@ where
     ) -> Result<Vec<RecordItemInput>> {
         let account_ids: Vec<AccountId> = cmd_items.iter().map(|i| i.account_id.clone()).collect();
         let accounts: HashMap<AccountId, Account> = uow
-            .find_all_by_ids::<Account, AccountSpecification, AR>(account_repo, sess, &account_ids)
+            .find_all_by_ids(self.account_repository.as_ref(), sess, &account_ids)
             .await
             .map_err(|e| e.convert())?;
 
@@ -339,23 +329,10 @@ where
         command: RecordCommand,
     ) -> Result<()> {
         match command {
-            RecordCommand::Create(cmd) => {
-                Self::do_create(&self.account_repository, uow, sess, vec![cmd]).await
-            }
-            RecordCommand::Update(cmd) => {
-                Self::do_update(
-                    &self.repository,
-                    &self.account_repository,
-                    uow,
-                    sess,
-                    vec![cmd],
-                )
-                .await
-            }
+            RecordCommand::Create(cmd) => self.do_create(uow, sess, vec![cmd]).await,
+            RecordCommand::Update(cmd) => self.do_update(uow, sess, vec![cmd]).await,
             RecordCommand::Delete(ids) => Self::do_delete(uow, ids).await,
-            RecordCommand::Batch(cmd) => {
-                Self::do_batch(&self.repository, &self.account_repository, uow, sess, cmd).await
-            }
+            RecordCommand::Batch(cmd) => self.do_batch(uow, sess, cmd).await,
         }
     }
 

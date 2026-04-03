@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat C:/Users/ukonn/Workspaces/white-rabbit/packages/endpoint-tauri/app/plugins/*.ts)",
       "Bash(cd:*)",
       "WebFetch(domain:vuetifyjs.com)",
       "WebFetch(domain:www.npmjs.com)",
@@ -9,7 +8,6 @@
       "WebFetch(domain:vuetify-nuxt-module.netlify.app)",
       "WebFetch(domain:registry.npmjs.org)",
       "Bash(yarn install:*)",
-      "Bash(echo \"exit:$?\")",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:michaelzanggl.com)",
@@ -17,7 +15,11 @@
       "WebFetch(domain:gist.github.com)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:dev.to)",
-      "Bash(yarn workspace:*)"
+      "Bash(yarn workspace:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(powershell:*)",
+      "Bash(ls:*)"
     ]
   }
 }

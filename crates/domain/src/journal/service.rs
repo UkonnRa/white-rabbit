@@ -31,7 +31,7 @@ impl<R: JournalRepository> JournalService<R> {
     /// - [`ErrorKind::Shared(NonEmpty)`](shared::ErrorKind::NonEmpty)
     ///   — a name is empty or blank.
     async fn do_create(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         commands: Vec<JournalCommandCreate>,
@@ -54,7 +54,7 @@ impl<R: JournalRepository> JournalService<R> {
 
         let spec = JournalSpecification::names(seen_names.iter().copied());
         if let Some(existing) = uow
-            .find_one(repo, sess, &spec)
+            .find_one(self.repository.as_ref(), sess, &spec)
             .await
             .map_err(|e| e.convert())?
         {
@@ -118,7 +118,7 @@ impl<R: JournalRepository> JournalService<R> {
     /// - [`ErrorKind::Shared(NonEmpty)`](shared::ErrorKind::NonEmpty)
     ///   — a name is empty or blank.
     async fn do_update(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         commands: Vec<JournalCommandUpdate>,
@@ -139,7 +139,7 @@ impl<R: JournalRepository> JournalService<R> {
 
         let id_vec: Vec<_> = commands.iter().map(|cmd| cmd.id.clone()).collect();
         let existing = uow
-            .find_all_by_ids::<Journal, _, _>(repo, sess, &id_vec)
+            .find_all_by_ids(self.repository.as_ref(), sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -165,7 +165,7 @@ impl<R: JournalRepository> JournalService<R> {
 
         let spec = JournalSpecification::names(new_names.iter().copied());
         let conflicts = uow
-            .find_all(repo, sess, &spec, None)
+            .find_all(self.repository.as_ref(), sess, &spec, None)
             .await
             .map_err(|e| e.convert())?;
 
@@ -232,12 +232,7 @@ impl<R: JournalRepository> JournalService<R> {
     /// any existing journal are silently ignored — this prevents
     /// ID-guessing attacks from inferring which IDs exist via error
     /// responses.
-    async fn do_delete(
-        _repo: &R,
-        _sess: &R::Session,
-        uow: &mut UnitOfWork,
-        ids: HashSet<JournalId>,
-    ) -> Result<()> {
+    async fn do_delete(uow: &mut UnitOfWork, ids: HashSet<JournalId>) -> Result<()> {
         for id in ids {
             uow.add_event(JournalEvent::Deleted(JournalDeleted { id: id.clone() }));
             uow.register_deleted::<Journal>(id);
@@ -252,14 +247,14 @@ impl<R: JournalRepository> JournalService<R> {
     /// - Deleted journals free their names for reuse by create/update.
     /// - Newly created journals are visible to the update name-conflict check.
     async fn do_batch(
-        repo: &R,
+        &self,
         sess: &R::Session,
         uow: &mut UnitOfWork,
         command: JournalCommandBatch,
     ) -> Result<()> {
-        Self::do_delete(repo, sess, uow, command.delete).await?;
-        Self::do_create(repo, sess, uow, command.create).await?;
-        Self::do_update(repo, sess, uow, command.update).await?;
+        Self::do_delete(uow, command.delete).await?;
+        self.do_create(sess, uow, command.create).await?;
+        self.do_update(sess, uow, command.update).await?;
         Ok(())
     }
 }
@@ -278,14 +273,10 @@ impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
         command: JournalCommand,
     ) -> Result<()> {
         match command {
-            JournalCommand::Create(cmd) => {
-                Self::do_create(&self.repository, sess, uow, vec![cmd]).await
-            }
-            JournalCommand::Update(cmd) => {
-                Self::do_update(&self.repository, sess, uow, vec![cmd]).await
-            }
-            JournalCommand::Delete(ids) => Self::do_delete(&self.repository, sess, uow, ids).await,
-            JournalCommand::Batch(cmd) => Self::do_batch(&self.repository, sess, uow, cmd).await,
+            JournalCommand::Create(cmd) => self.do_create(sess, uow, vec![cmd]).await,
+            JournalCommand::Update(cmd) => self.do_update(sess, uow, vec![cmd]).await,
+            JournalCommand::Delete(ids) => Self::do_delete(uow, ids).await,
+            JournalCommand::Batch(cmd) => self.do_batch(sess, uow, cmd).await,
         }
     }
 
