@@ -1,3 +1,4 @@
+pub mod account;
 pub mod error;
 pub mod journal;
 pub mod state;
@@ -14,6 +15,11 @@ pub fn register_handlers<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri
         journal::list_journals,
         journal::update_journal,
         journal::delete_journal,
+        account::create_account,
+        account::get_account,
+        account::list_accounts,
+        account::update_account,
+        account::delete_account,
     ])
 }
 
