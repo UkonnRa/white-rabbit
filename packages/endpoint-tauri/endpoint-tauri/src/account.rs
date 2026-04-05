@@ -103,9 +103,10 @@ pub async fn list_accounts(
         filters.push(AccountSpecification::name(name));
     }
     if let Some(account_type) = &filter.r#type
-        && let Some(t) = parse_account_type(account_type) {
-            filters.push(AccountSpecification::account_type(t));
-        }
+        && let Some(t) = parse_account_type(account_type)
+    {
+        filters.push(AccountSpecification::account_type(t));
+    }
     if let Some(tag) = &filter.tag {
         let tags: HashSet<_> = tag.split(',').map(|s| s.trim().to_string()).collect();
         filters.push(AccountSpecification::tags(tags));

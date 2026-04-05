@@ -102,7 +102,7 @@ static files to `.output/public/` for Tauri's webview.
 
 ## References
 
-- Nuxt Layers: https://nuxt.com/docs/4.x/guide/going-further/layers
-- Nuxt Plugins (providing helpers): https://nuxt.com/docs/4.x/directory-structure/app/plugins
-- Nuxt Composables (plugin injection access): https://nuxt.com/docs/4.x/directory-structure/app/composables
+- Nuxt Layers: <https://nuxt.com/docs/4.x/guide/going-further/layers>
+- Nuxt Plugins (providing helpers): <https://nuxt.com/docs/4.x/directory-structure/app/plugins>
+- Nuxt Composables (plugin injection access): <https://nuxt.com/docs/4.x/directory-structure/app/composables>
 - Architecture Overview, section 14

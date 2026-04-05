@@ -86,14 +86,12 @@ script = "yarn eslint --fix ."
 script = "yarn workspaces foreach -Rpt --from '@white-rabbit/*' run typecheck"
 
 [tasks.lint-fix-frontend]
-run_task = [
-    { name = ["lint-fix-prettier", "lint-fix-eslint", "lint-fix-tsc"] },
-]
+run_task = [{ name = ["lint-fix-prettier", "lint-fix-eslint", "lint-fix-tsc"] }]
 
 [tasks.lint-fix-md]
 install_crate = { crate_name = "rumdl", binary = "rumdl", test_arg = "--version" }
 command = "rumdl"
-args = ["check", "--fix", "docs/", "AGENTS.md"]
+args = ["check", "--fix", "."]
 
 [tasks.lint-fix-rustfmt]
 toolchain = "nightly"
@@ -111,13 +109,15 @@ args = ["sort", "--workspace", "--grouped"]
 
 [tasks.lint-fix-backend]
 run_task = [
-    { name = ["lint-fix-cargo-sort", "lint-fix-rustfmt", "lint-fix-clippy"] },
+    { name = [
+        "lint-fix-cargo-sort",
+        "lint-fix-rustfmt",
+        "lint-fix-clippy",
+    ] },
 ]
 
 [tasks.lint-fix]
-run_task = [
-    { name = ["lint-fix-frontend", "lint-fix-md", "lint-fix-backend"] },
-]
+run_task = [{ name = ["lint-fix-frontend", "lint-fix-md", "lint-fix-backend"] }]
 
 # =============================================================================
 # Tauri
@@ -162,5 +162,10 @@ pipx upgrade pre-commit || true
 
 [tasks.upgrade]
 run_task = [
-    { name = ["upgrade-1", "upgrade-2", "upgrade-yarn", "upgrade-pipx"] },
+    { name = [
+        "upgrade-1",
+        "upgrade-2",
+        "upgrade-yarn",
+        "upgrade-pipx",
+    ] },
 ]

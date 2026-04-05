@@ -131,4 +131,4 @@ after save.
 - ADR-0001: DDD + Dry-Run + CQRS + Specification
 - ADR-0002: Event Sourcing with Snapshot Dual-Write Persistence
 - Architecture Overview, sections 3.1, 5, 7
-- Unit of Work concept: https://en.wikipedia.org/wiki/Unit_of_work
+- Unit of Work concept: <https://en.wikipedia.org/wiki/Unit_of_work>

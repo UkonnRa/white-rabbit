@@ -9,7 +9,8 @@ The system needs to:
 
 - Keep business rules in aggregate boundaries (DDD).
 - Execute the same command logic in real-run and dry-run modes.
-- Prevent irreversible side effects in dry-run while still computing in-transaction reactions.
+- Prevent irreversible side effects in dry-run while still computing
+  in-transaction reactions.
 - Support CQRS where read models may be delayed (eventual consistency).
 - Avoid duplicating query semantics across read and write implementations.
 - Support practical command flows that may include "write-then-query" patterns.
@@ -23,36 +24,43 @@ The system needs to:
 2. **Execution modes**
    - All command handlers support two modes:
      - Real run: persist changes and dispatch side effects after commit.
-     - Dry run: do not persist to primary store and do not execute external side effects.
+     - Dry run: do not persist to primary store and do not execute external
+       side effects.
    - Dry run still executes internal deterministic/in-transaction reactions.
 
 3. **Unit of Work as execution boundary**
    - Unit of Work tracks identity, snapshots, and change sets.
    - Unit of Work computes structured diff output for dry-run.
-   - Unit of Work separates internal event processing from external side effects.
+   - Unit of Work separates internal event processing from external side
+     effects.
 
 4. **Two-phase event handling**
    - Phase A: internal in-process events run until stable.
    - Phase B: external side effects run only after commit in real run.
-   - In dry run, external side effects are captured as preview output, not executed.
+   - In dry run, external side effects are captured as preview output,
+     not executed.
 
 5. **CQRS consistency rule**
    - Command-time decision queries must use write-consistent sources.
-   - Read models are optimized for query performance and may be eventually consistent.
+   - Read models are optimized for query performance and may be eventually
+     consistent.
 
 6. **Specification strategy**
    - Specification expresses query intent only.
    - Executors/adapters perform storage-specific translation.
-   - Read and write sides may use different executors while sharing Specification semantics.
+   - Read and write sides may use different executors while sharing
+     Specification semantics.
 
 7. **Dry-run data strategy**
    - Use an overlay model (`staging delta + primary data`) for dry-run queries.
-   - Query precedence is overlay over primary, including delete/tombstone behavior.
+   - Query precedence is overlay over primary, including delete/tombstone
+     behavior.
    - Only changed entities are staged.
 
 8. **Error layering**
    - Shared errors remain generic and reusable.
-   - Domain/application layers enrich errors with contextual details for diagnostics and API responses.
+   - Domain/application layers enrich errors with contextual details for
+     diagnostics and API responses.
 
 ## Consequences
 
@@ -66,7 +74,8 @@ The system needs to:
 
 ### Negative
 
-- Additional infrastructure complexity (unit of work, event routing, overlay query behavior).
+- Additional infrastructure complexity (unit of work, event routing,
+  overlay query behavior).
 - Stricter discipline required around side-effect classification.
 - More test surface (mode-specific behavior and event phase behavior).
 
@@ -87,14 +96,19 @@ The system needs to:
 ## References
 
 - Domain events and DDD guidance:
-  - https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/domain-events-design-implementation
+  - [Microsoft: Domain Events][ref-domain-events]
 - CQRS pattern:
-  - https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs
+  - [Microsoft: CQRS Pattern][ref-cqrs]
 - Unit of Work concept:
-  - https://en.wikipedia.org/wiki/Unit_of_work
+  - <https://en.wikipedia.org/wiki/Unit_of_work>
 - Transactional outbox:
-  - https://microservices.io/patterns/data/transactional-outbox.html
-  - https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-outbox-cosmos
+  - [Microservices.io: Transactional Outbox][ref-outbox]
+  - [Microsoft: Transactional Outbox Cosmos][ref-outbox-cosmos]
 - Error response standards:
-  - https://www.rfc-editor.org/rfc/rfc9457.html
-  - https://jsonapi.org/format/#errors
+  - <https://www.rfc-editor.org/rfc/rfc9457.html>
+  - <https://jsonapi.org/format/#errors>
+
+[ref-domain-events]: https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/domain-events-design-implementation
+[ref-cqrs]: https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs
+[ref-outbox]: https://microservices.io/patterns/data/transactional-outbox.html
+[ref-outbox-cosmos]: https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-outbox-cosmos

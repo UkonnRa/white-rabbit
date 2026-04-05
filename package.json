@@ -5,7 +5,7 @@
   ],
   "packageManager": "yarn@4.13.0",
   "devDependencies": {
-    "@eslint/compat": "^2.0.4",
+    "@eslint/compat": "^2.0.5",
     "@eslint/css": "^1.1.0",
     "@eslint/js": "^10.0.1",
     "@eslint/json": "^1.2.0",
@@ -21,7 +21,7 @@
     "prettier": "^3.8.1",
     "sass-embedded": "^1.99.0",
     "tailwindcss": "^4.2.2",
-    "typescript-eslint": "^8.58.0",
+    "typescript-eslint": "^8.58.1",
     "vue-eslint-parser": "^10.4.0",
     "vue-router": "^5.0.4",
     "vue-tsc": "^3.2.6"
