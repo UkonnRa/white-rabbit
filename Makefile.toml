@@ -85,8 +85,18 @@ script = "yarn eslint --fix ."
 [tasks.lint-fix-tsc]
 script = "yarn workspaces foreach -Rpt --from '@white-rabbit/*' run typecheck"
 
+[tasks.lint-fix-test]
+script = "yarn workspaces foreach -Rpt --from '@white-rabbit/*' run test"
+
 [tasks.lint-fix-frontend]
-run_task = [{ name = ["lint-fix-prettier", "lint-fix-eslint", "lint-fix-tsc"] }]
+run_task = [
+    { name = [
+        "lint-fix-prettier",
+        "lint-fix-eslint",
+        "lint-fix-tsc",
+        "lint-fix-test",
+    ] },
+]
 
 [tasks.lint-fix-md]
 install_crate = { crate_name = "rumdl", binary = "rumdl", test_arg = "--version" }

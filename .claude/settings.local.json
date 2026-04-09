@@ -5,12 +5,10 @@
       "WebFetch(domain:vuetifyjs.com)",
       "WebFetch(domain:www.npmjs.com)",
       "WebSearch",
-      "WebFetch(domain:vuetify-nuxt-module.netlify.app)",
       "WebFetch(domain:registry.npmjs.org)",
       "Bash(yarn install:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:michaelzanggl.com)",
       "WebFetch(domain:nuxt.com)",
       "WebFetch(domain:gist.github.com)",
       "WebFetch(domain:medium.com)",
@@ -19,7 +17,10 @@
       "Bash(cargo build:*)",
       "Bash(cargo test:*)",
       "Bash(powershell:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx vitest:*)",
+      "Bash(node -e ':*)",
+      "Bash(yarn add:*)"
     ]
   }
 }

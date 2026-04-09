@@ -42,7 +42,7 @@ export default defineConfig([
   {
     files: ["**/*.md"],
     plugins: { markdown: markdown as Plugin },
-    language: "markdown/commonmark",
+    language: "markdown/gfm",
     extends: ["markdown/recommended"],
   },
   {
