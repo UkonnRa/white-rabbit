@@ -1,0 +1,57 @@
+/* tailwind-default theme tokens — light mode (default) */
+[data-theme="tailwind-default"] {
+  /* Color */
+  --wr-primary: oklch(0.55 0.2 260);
+  --wr-on-primary: oklch(1 0 0);
+  --wr-secondary: oklch(0.55 0.1 200);
+  --wr-on-secondary: oklch(1 0 0);
+  --wr-surface: oklch(0.99 0 0);
+  --wr-on-surface: oklch(0.15 0 0);
+  --wr-surface-variant: oklch(0.94 0.01 260);
+  --wr-on-surface-variant: oklch(0.35 0.02 260);
+  --wr-background: oklch(0.98 0 0);
+  --wr-on-background: oklch(0.15 0 0);
+  --wr-error: oklch(0.55 0.22 27);
+  --wr-on-error: oklch(1 0 0);
+  --wr-outline: oklch(0.55 0.02 260);
+  --wr-outline-variant: oklch(0.82 0.01 260);
+
+  /* Radius */
+  --wr-radius-sm: 0.25rem;
+  --wr-radius-md: 0.5rem;
+  --wr-radius-lg: 0.75rem;
+  --wr-radius-xl: 1rem;
+  --wr-radius-full: 9999px;
+
+  /* Spacing */
+  --wr-spacing-xs: 0.25rem;
+  --wr-spacing-sm: 0.5rem;
+  --wr-spacing-md: 1rem;
+  --wr-spacing-lg: 1.5rem;
+  --wr-spacing-xl: 2rem;
+
+  /* Motion */
+  --wr-duration-fast: 100ms;
+  --wr-duration-normal: 200ms;
+  --wr-duration-slow: 400ms;
+  --wr-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --wr-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Dark mode overrides */
+[data-theme="tailwind-default"][data-mode="dark"] {
+  --wr-primary: oklch(0.78 0.15 260);
+  --wr-on-primary: oklch(0.2 0.08 260);
+  --wr-secondary: oklch(0.75 0.08 200);
+  --wr-on-secondary: oklch(0.2 0.05 200);
+  --wr-surface: oklch(0.2 0.01 260);
+  --wr-on-surface: oklch(0.92 0 0);
+  --wr-surface-variant: oklch(0.3 0.02 260);
+  --wr-on-surface-variant: oklch(0.82 0.01 260);
+  --wr-background: oklch(0.16 0.01 260);
+  --wr-on-background: oklch(0.92 0 0);
+  --wr-error: oklch(0.75 0.18 27);
+  --wr-on-error: oklch(0.2 0.08 27);
+  --wr-outline: oklch(0.6 0.02 260);
+  --wr-outline-variant: oklch(0.4 0.02 260);
+}

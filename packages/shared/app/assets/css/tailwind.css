@@ -11,4 +11,37 @@
 @import "vuetify/styles";
 @import "@mdi/font/css/materialdesignicons.css";
 @import "tailwindcss";
+@import "../../themes/tailwind-default/tokens.css";
 @source "../..";
+
+@theme inline {
+  /* Color tokens */
+  --color-primary: var(--wr-primary);
+  --color-on-primary: var(--wr-on-primary);
+  --color-secondary: var(--wr-secondary);
+  --color-on-secondary: var(--wr-on-secondary);
+  --color-surface: var(--wr-surface);
+  --color-on-surface: var(--wr-on-surface);
+  --color-surface-variant: var(--wr-surface-variant);
+  --color-on-surface-variant: var(--wr-on-surface-variant);
+  --color-background: var(--wr-background);
+  --color-on-background: var(--wr-on-background);
+  --color-error: var(--wr-error);
+  --color-on-error: var(--wr-on-error);
+  --color-outline: var(--wr-outline);
+  --color-outline-variant: var(--wr-outline-variant);
+
+  /* Radius tokens */
+  --radius-sm: var(--wr-radius-sm);
+  --radius-md: var(--wr-radius-md);
+  --radius-lg: var(--wr-radius-lg);
+  --radius-xl: var(--wr-radius-xl);
+  --radius-full: var(--wr-radius-full);
+
+  /* Motion tokens */
+  --duration-fast: var(--wr-duration-fast);
+  --duration-normal: var(--wr-duration-normal);
+  --duration-slow: var(--wr-duration-slow);
+  --ease-standard: var(--wr-easing-standard);
+  --ease-emphasized: var(--wr-easing-emphasized);
+}

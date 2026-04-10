@@ -15,12 +15,12 @@ export function resolveRecipe(
 
   // Variant
   if (props.variant && recipe.variants[props.variant]) {
-    classes.push(...recipe.variants[props.variant]);
+    classes.push(...(recipe.variants[props.variant] || []));
   }
 
   // Size
   if (props.size && recipe.sizes[props.size]) {
-    classes.push(...recipe.sizes[props.size]);
+    classes.push(...(recipe.sizes[props.size] || []));
   }
 
   // Interaction states (hover/focus/pressed are always applied as

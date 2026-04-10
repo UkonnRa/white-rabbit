@@ -57,7 +57,7 @@ describe("theme type contracts", () => {
         },
       },
     };
-    expectTypeOf(theme).toMatchTypeOf<ThemeDefinition>();
+    expectTypeOf(theme).toExtend<ThemeDefinition>();
     expectTypeOf(theme.directives).toEqualTypeOf<
       Record<string, import("vue").Directive> | undefined
     >();
