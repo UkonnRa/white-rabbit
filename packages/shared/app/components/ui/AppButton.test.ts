@@ -76,7 +76,7 @@ describe("AppButton integration (theme -> recipe -> classes)", () => {
   it("returns empty array for unregistered component recipe", () => {
     const { childResult, unmount } = withNestedSetup(
       () => createThemeRoot({ theme: "tailwind-default", mode: "light" }),
-      () => useRecipe("dialog", {}),
+      () => useRecipe("nonexistent", {}),
     );
 
     expect(childResult.value).toEqual([]);

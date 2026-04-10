@@ -3188,10 +3188,28 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tanstack/table-core@npm:8.21.3":
+  version: 8.21.3
+  resolution: "@tanstack/table-core@npm:8.21.3"
+  checksum: 10c0/40e3560e6d55e07cc047024aa7f83bd47a9323d21920d4adabba8071fd2d21230c48460b26cedf392588f8265b9edc133abb1b0d6d0adf4dae0970032900a8c9
+  languageName: node
+  linkType: hard
+
 "@tanstack/virtual-core@npm:3.13.23":
   version: 3.13.23
   resolution: "@tanstack/virtual-core@npm:3.13.23"
   checksum: 10c0/3487089ea4e1dcbb01836f51a1b35b709f9ba03312fe600ddb97c893c16be213e1690af735717b1d6b2e22dfec691c338bc96b5965228c195840249699d5273a
+  languageName: node
+  linkType: hard
+
+"@tanstack/vue-table@npm:^8.21.3":
+  version: 8.21.3
+  resolution: "@tanstack/vue-table@npm:8.21.3"
+  dependencies:
+    "@tanstack/table-core": "npm:8.21.3"
+  peerDependencies:
+    vue: ">=3.2"
+  checksum: 10c0/d2c0da0bcf411a1d457f1daa82323837c82416cb5e30f931c4b6e9aec2dd64e3259bade3f1d20398dc9bf5fcc665e315c697198fe8996b995f8c39a6a6aebee5
   languageName: node
   linkType: hard
 
@@ -4552,6 +4570,7 @@ __metadata:
     "@mdi/font": "npm:^7.4.47"
     "@nuxt/eslint": "npm:1.15.2"
     "@tailwindcss/vite": "npm:^4.2.2"
+    "@tanstack/vue-table": "npm:^8.21.3"
     "@vueuse/core": "npm:^14.2.1"
     "@vueuse/nuxt": "npm:14.2.1"
     happy-dom: "npm:^20.8.9"
