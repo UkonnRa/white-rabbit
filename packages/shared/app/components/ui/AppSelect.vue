@@ -13,6 +13,7 @@ import {
 import { computed } from "vue";
 import { resolveRecipe } from "../../composables/useRecipe";
 import { useTheme } from "../../composables/useTheme";
+import AppIcon from "./AppIcon.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -71,7 +72,7 @@ const itemClasses = computed(() => {
             <SelectItemIndicator
               class="absolute left-2 inline-flex items-center"
             >
-              &#x2713;
+              <AppIcon icon="lucide:check" size="sm" />
             </SelectItemIndicator>
             <SelectItemText>{{ option.label }}</SelectItemText>
           </SelectItem>

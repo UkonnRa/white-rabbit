@@ -5,6 +5,7 @@ import AppCard from "./ui/AppCard.vue";
 import AppInput from "./ui/AppInput.vue";
 import AppTextarea from "./ui/AppTextarea.vue";
 import AppButton from "./ui/AppButton.vue";
+import AppIcon from "./ui/AppIcon.vue";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };
@@ -107,7 +108,7 @@ function handleSubmit() {
               aria-label="Remove tag"
               @click="removeTag(tag)"
             >
-              &#x2715;
+              <AppIcon icon="lucide:x" size="sm" />
             </button>
           </span>
         </div>

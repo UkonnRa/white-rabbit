@@ -12,6 +12,7 @@ import {
 import { computed } from "vue";
 import { resolveRecipe } from "../../composables/useRecipe";
 import { useTheme } from "../../composables/useTheme";
+import AppIcon from "./AppIcon.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -77,7 +78,7 @@ const emptyClasses = computed(() => {
             <ComboboxItemIndicator
               class="absolute left-2 inline-flex items-center"
             >
-              &#x2713;
+              <AppIcon icon="lucide:check" size="sm" />
             </ComboboxItemIndicator>
             <span>{{ option.label }}</span>
           </ComboboxItem>

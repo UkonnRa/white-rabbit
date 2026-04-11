@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Primitive } from "reka-ui";
 import { useRecipe } from "../../composables/useRecipe";
 
 const props = withDefaults(
@@ -21,12 +20,5 @@ const classes = useRecipe("textarea", props);
 </script>
 
 <template>
-  <Primitive
-    v-model="model"
-    as="textarea"
-    :class="classes"
-    :disabled
-    :rows
-    v-bind="$attrs"
-  />
+  <textarea v-model="model" :class="classes" :disabled :rows v-bind="$attrs" />
 </template>

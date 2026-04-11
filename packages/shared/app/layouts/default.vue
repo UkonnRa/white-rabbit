@@ -1,12 +1,26 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useMode } from "../composables/useMode";
+import { useAppTheme } from "../composables/useAppTheme";
 import AppButton from "../components/ui/AppButton.vue";
+import AppIcon from "../components/ui/AppIcon.vue";
 
 const { mode, toggle: toggleDark } = useMode();
 const isDark = computed(() => mode.value === "dark");
 
+const {
+  themeName,
+  seedColor,
+  setTheme,
+  setSeedColor,
+  PALETTE,
+  AVAILABLE_THEMES,
+} = useAppTheme();
+
+const isMD3 = computed(() => themeName.value === "md3-expressive");
+
 const drawerOpen = ref(false);
+const showPalette = ref(false);
 </script>
 
 <template>
@@ -21,18 +35,72 @@ const drawerOpen = ref(false);
         aria-label="Toggle navigation"
         @click="drawerOpen = !drawerOpen"
       >
-        &#9776;
+        <AppIcon icon="lucide:menu" size="md" />
       </AppButton>
       <h1 class="text-base font-semibold">White Rabbit</h1>
 
-      <div class="ml-auto flex items-center gap-1">
+      <div class="ml-auto flex items-center gap-2">
+        <!-- Theme switcher -->
+        <div class="flex items-center gap-1">
+          <AppButton
+            v-for="t in AVAILABLE_THEMES"
+            :key="t.name"
+            :variant="themeName === t.name ? 'solid' : 'outlined'"
+            size="sm"
+            @click="setTheme(t.name)"
+          >
+            {{ t.label }}
+          </AppButton>
+        </div>
+
+        <!-- MD3 seed color picker -->
+        <div v-if="isMD3" class="relative">
+          <AppButton
+            variant="ghost"
+            size="sm"
+            aria-label="Change seed color"
+            @click="showPalette = !showPalette"
+          >
+            <span
+              class="inline-block size-5 rounded-full border border-outline-variant"
+              :style="{ backgroundColor: seedColor }"
+            />
+            <AppIcon icon="lucide:palette" size="sm" />
+          </AppButton>
+          <div
+            v-if="showPalette"
+            class="absolute right-0 top-full mt-1 z-50 rounded-lg border border-outline-variant bg-surface shadow-lg p-2"
+          >
+            <div class="grid grid-cols-6 gap-2 p-1">
+              <button
+                v-for="color in PALETTE"
+                :key="color.hex"
+                type="button"
+                class="size-6 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer"
+                :class="
+                  seedColor === color.hex
+                    ? 'border-primary ring-2 ring-primary/30'
+                    : 'border-transparent'
+                "
+                :style="{ backgroundColor: color.hex }"
+                :title="color.label"
+                @click="
+                  setSeedColor(color.hex);
+                  showPalette = false;
+                "
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Dark mode toggle -->
         <AppButton
           variant="ghost"
           size="sm"
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
           @click="toggleDark"
         >
-          {{ isDark ? "&#x1F319;" : "&#x2600;&#xFE0F;" }}
+          <AppIcon :icon="isDark ? 'lucide:moon' : 'lucide:sun'" size="md" />
         </AppButton>
       </div>
     </header>
@@ -48,7 +116,7 @@ const drawerOpen = ref(false);
             to="/"
             class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors"
           >
-            &#x1F4D6; Journals
+            <AppIcon icon="lucide:book-open" size="md" /> Journals
           </NuxtLink>
         </nav>
       </aside>

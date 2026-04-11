@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Primitive } from "reka-ui";
 import { useRecipe } from "../../composables/useRecipe";
 
 const props = withDefaults(
@@ -19,11 +18,5 @@ const classes = useRecipe("input", props);
 </script>
 
 <template>
-  <Primitive
-    v-model="model"
-    as="input"
-    :class="classes"
-    :disabled
-    v-bind="$attrs"
-  />
+  <input v-model="model" :class="classes" :disabled v-bind="$attrs" />
 </template>

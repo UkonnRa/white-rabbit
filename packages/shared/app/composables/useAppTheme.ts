@@ -7,7 +7,8 @@ import {
   type DynamicColor,
   type DynamicScheme,
 } from "@material/material-color-utilities";
-import { useLocalStorage } from "@vueuse/core";
+import { inject } from "vue";
+import { THEME_NAME_KEY, SEED_COLOR_KEY } from "../plugins/theme";
 
 // ── Safe colors: excludes red/orange/yellow to avoid conflict with
 //    error (red) and warning (yellow/amber) semantic colors ──────────────────
@@ -27,7 +28,12 @@ export const PALETTE = [
   { label: "Brown", hex: "#4E342E" },
 ] as const;
 
-export const DEFAULT_SEED = PALETTE[0].hex;
+export const DEFAULT_SEED = "#6750A4";
+
+export const AVAILABLE_THEMES = [
+  { name: "tailwind-default", label: "Tailwind Default" },
+  { name: "md3-expressive", label: "MD3 Expressive" },
+] as const;
 
 // ── Color generation ────────────────────────────────────────────────────────
 
@@ -56,19 +62,36 @@ export function buildTheme(hex: string, dark: boolean) {
 // ── Composable ──────────────────────────────────────────────────────────────
 
 /**
- * Seed color persistence.
+ * Theme and seed color management composable.
  *
- * Phase 4 (md3-expressive) will use `applySeed` to regenerate MD3 tokens
- * at runtime. For tailwind-default theme, the seed is stored but has no
- * visual effect.
+ * Injects the reactive theme name and seed color refs provided by the
+ * Nuxt plugin. Components use this to switch themes and change the
+ * MD3 seed color.
  */
 export function useAppTheme() {
-  const seed = useLocalStorage("app-seed-color", DEFAULT_SEED);
+  const themeName = inject(THEME_NAME_KEY);
+  const seedColor = inject(SEED_COLOR_KEY);
 
-  function applySeed(hex: string) {
-    seed.value = hex;
-    // MD3 token injection will be added in Phase 4.
+  if (!themeName || !seedColor) {
+    throw new Error(
+      "useAppTheme: no theme context found. Is the theme plugin installed?",
+    );
   }
 
-  return { seed, applySeed, PALETTE };
+  function setTheme(name: string) {
+    themeName.value = name;
+  }
+
+  function setSeedColor(hex: string) {
+    seedColor.value = hex;
+  }
+
+  return {
+    themeName,
+    seedColor,
+    setTheme,
+    setSeedColor,
+    PALETTE,
+    AVAILABLE_THEMES,
+  };
 }

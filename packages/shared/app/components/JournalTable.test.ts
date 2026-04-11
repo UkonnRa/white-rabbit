@@ -107,8 +107,11 @@ describe("JournalTable", () => {
     const wrapper = mountWithTheme(JournalTable, {
       props: { journals, addingNew: true },
     });
+    // In the new row, the cancel button is outlined+sm (second button after the solid save button)
     const buttons = wrapper.findAllComponents({ name: "AppButton" });
-    const cancelBtn = buttons.find((b) => b.text().includes("✕"));
+    const cancelBtn = buttons.find(
+      (b) => b.props("variant") === "outlined" && b.props("size") === "sm",
+    );
     expect(cancelBtn).toBeDefined();
     await cancelBtn!.trigger("click");
     expect(wrapper.emitted("cancelNew")).toBeTruthy();
@@ -118,20 +121,22 @@ describe("JournalTable", () => {
     const wrapper = mountWithTheme(JournalTable, {
       props: { journals, addingNew: false },
     });
+    // Each row has 2 outlined action buttons (edit + delete) — 3 rows × 2 = 6
     const buttons = wrapper.findAllComponents({ name: "AppButton" });
-    const editButtons = buttons.filter((b) => b.text().includes("✎"));
-    const deleteButtons = buttons.filter((b) => b.text().includes("🗑"));
-    expect(editButtons.length).toBe(3);
-    expect(deleteButtons.length).toBe(3);
+    const outlinedButtons = buttons.filter(
+      (b) => b.props("variant") === "outlined",
+    );
+    expect(outlinedButtons.length).toBe(6);
   });
 
   it("emits delete when delete button is clicked", async () => {
     const wrapper = mountWithTheme(JournalTable, {
       props: { journals, addingNew: false },
     });
+    // Delete buttons have class text-error
     const deleteBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("🗑"));
+      .find((b) => b.classes().includes("text-error"));
     await deleteBtn!.trigger("click");
     expect(wrapper.emitted("delete")).toBeTruthy();
   });
@@ -140,16 +145,21 @@ describe("JournalTable", () => {
     const wrapper = mountWithTheme(JournalTable, {
       props: { journals, addingNew: false },
     });
+    // Edit buttons are outlined without text-error class
     const editBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✎"));
+      .find(
+        (b) =>
+          b.props("variant") === "outlined" &&
+          !b.classes().includes("text-error"),
+      );
     await editBtn!.trigger("click");
     await nextTick();
 
-    // Should now show ✓/✕ buttons instead of ✎/🗑
+    // Should now show a solid (save) button
     const confirmBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✓"));
+      .find((b) => b.props("variant") === "solid" && b.props("size") === "sm");
     expect(confirmBtn).toBeDefined();
   });
 
@@ -160,13 +170,17 @@ describe("JournalTable", () => {
 
     const editBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✎"));
+      .find(
+        (b) =>
+          b.props("variant") === "outlined" &&
+          !b.classes().includes("text-error"),
+      );
     await editBtn!.trigger("click");
     await nextTick();
 
     const saveBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✓"));
+      .find((b) => b.props("variant") === "solid" && b.props("size") === "sm");
     await saveBtn!.trigger("click");
 
     expect(wrapper.emitted("update")).toBeTruthy();
@@ -181,20 +195,31 @@ describe("JournalTable", () => {
 
     const editBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✎"));
+      .find(
+        (b) =>
+          b.props("variant") === "outlined" &&
+          !b.classes().includes("text-error"),
+      );
     await editBtn!.trigger("click");
     await nextTick();
 
+    // Cancel in edit mode is the outlined sm button (not solid)
     const cancelBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✕"));
+      .find(
+        (b) =>
+          b.props("variant") === "outlined" &&
+          b.props("size") === "sm" &&
+          !b.classes().includes("text-error"),
+      );
     await cancelBtn!.trigger("click");
     await nextTick();
 
-    const editBtnAgain = wrapper
+    // Should be back to normal mode — delete buttons visible again
+    const deleteBtn = wrapper
       .findAllComponents({ name: "AppButton" })
-      .find((b) => b.text().includes("✎"));
-    expect(editBtnAgain).toBeDefined();
+      .find((b) => b.classes().includes("text-error"));
+    expect(deleteBtn).toBeDefined();
   });
 
   it("renders inside an AppDataTable", () => {
@@ -220,5 +245,88 @@ describe("JournalTable", () => {
     expect(wrapper.text()).toContain("Description");
     expect(wrapper.text()).toContain("Tags");
     expect(wrapper.text()).toContain("Actions");
+  });
+
+  // ── Filter tests ──────────────────────────────────────────────────────────
+
+  it("filters rows by name", async () => {
+    const wrapper = mountWithTheme(JournalTable, {
+      props: { journals, addingNew: false },
+    });
+    const nameInput = wrapper.find('input[placeholder="Filter name…"]');
+    await nameInput.setValue("Alpha");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Alpha");
+    expect(wrapper.text()).not.toContain("Beta");
+    expect(wrapper.text()).not.toContain("Gamma");
+  });
+
+  it("filters rows by description", async () => {
+    const wrapper = mountWithTheme(JournalTable, {
+      props: { journals, addingNew: false },
+    });
+    const descInput = wrapper.find('input[placeholder="Filter description…"]');
+    await descInput.setValue("Second");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Beta");
+    expect(wrapper.text()).not.toContain("Alpha");
+    expect(wrapper.text()).not.toContain("Gamma");
+  });
+
+  it("filters rows by tag", async () => {
+    const wrapper = mountWithTheme(JournalTable, {
+      props: { journals, addingNew: false },
+    });
+    const tagsInput = wrapper.find('input[placeholder="Filter tags…"]');
+    await tagsInput.setValue("personal");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Beta");
+    expect(wrapper.text()).not.toContain("Alpha");
+    expect(wrapper.text()).not.toContain("Gamma");
+  });
+
+  it("shows no rows when filter matches nothing", async () => {
+    const wrapper = mountWithTheme(JournalTable, {
+      props: { journals, addingNew: false },
+    });
+    const nameInput = wrapper.find('input[placeholder="Filter name…"]');
+    await nameInput.setValue("nonexistent");
+    await nextTick();
+
+    expect(wrapper.text()).not.toContain("Alpha");
+    expect(wrapper.text()).not.toContain("Beta");
+    expect(wrapper.text()).not.toContain("Gamma");
+    expect(wrapper.text()).toContain("No journals found.");
+  });
+
+  it("filter is case-insensitive", async () => {
+    const wrapper = mountWithTheme(JournalTable, {
+      props: { journals, addingNew: false },
+    });
+    const nameInput = wrapper.find('input[placeholder="Filter name…"]');
+    await nameInput.setValue("alpha");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Alpha");
+    expect(wrapper.text()).not.toContain("Beta");
+  });
+
+  it("clears filter to show all rows again", async () => {
+    const wrapper = mountWithTheme(JournalTable, {
+      props: { journals, addingNew: false },
+    });
+    const nameInput = wrapper.find('input[placeholder="Filter name…"]');
+    await nameInput.setValue("Alpha");
+    await nextTick();
+    expect(wrapper.text()).not.toContain("Beta");
+
+    await nameInput.setValue("");
+    await nextTick();
+    expect(wrapper.text()).toContain("Alpha");
+    expect(wrapper.text()).toContain("Beta");
+    expect(wrapper.text()).toContain("Gamma");
   });
 });

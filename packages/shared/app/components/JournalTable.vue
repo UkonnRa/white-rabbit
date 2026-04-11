@@ -6,6 +6,7 @@ import AppDataTable from "./ui/AppDataTable.vue";
 import AppInput from "./ui/AppInput.vue";
 import AppButton from "./ui/AppButton.vue";
 import AppChip from "./ui/AppChip.vue";
+import AppIcon from "./ui/AppIcon.vue";
 
 const props = defineProps<{
   journals: Journal[];
@@ -191,10 +192,10 @@ const columns: ColumnDef<Journal, unknown>[] = [
               :disabled="!newForm.name.trim()"
               @click="submitNew"
             >
-              &#x2713;
+              <AppIcon icon="lucide:check" size="sm" />
             </AppButton>
             <AppButton size="sm" variant="outlined" @click="emit('cancelNew')">
-              &#x2715;
+              <AppIcon icon="lucide:x" size="sm" />
             </AppButton>
           </div>
         </td>
@@ -263,10 +264,10 @@ const columns: ColumnDef<Journal, unknown>[] = [
             :disabled="!editForm.name.trim()"
             @click="saveEdit(row.original.id)"
           >
-            &#x2713;
+            <AppIcon icon="lucide:check" size="sm" />
           </AppButton>
           <AppButton size="sm" variant="outlined" @click="cancelEdit">
-            &#x2715;
+            <AppIcon icon="lucide:x" size="sm" />
           </AppButton>
         </template>
         <template v-else>
@@ -275,7 +276,7 @@ const columns: ColumnDef<Journal, unknown>[] = [
             variant="outlined"
             @click="startEdit(row.original)"
           >
-            &#x270E;
+            <AppIcon icon="lucide:pencil" size="sm" />
           </AppButton>
           <AppButton
             size="sm"
@@ -283,7 +284,7 @@ const columns: ColumnDef<Journal, unknown>[] = [
             class="text-error border-error"
             @click="emit('delete', row.original)"
           >
-            &#x1F5D1;
+            <AppIcon icon="lucide:trash-2" size="sm" />
           </AppButton>
         </template>
       </div>

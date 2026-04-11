@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Primitive } from "reka-ui";
+import { Icon } from "@iconify/vue";
 import { useRecipe } from "../../composables/useRecipe";
 
 const props = withDefaults(
   defineProps<{
+    icon: string;
     size?: "sm" | "md" | "lg" | "xl";
   }>(),
   {
@@ -12,10 +13,22 @@ const props = withDefaults(
 );
 
 const classes = useRecipe("icon", props);
+
+const sizeMap: Record<string, string> = {
+  sm: "16",
+  md: "20",
+  lg: "24",
+  xl: "32",
+};
 </script>
 
 <template>
-  <Primitive as="span" :class="classes" aria-hidden="true" v-bind="$attrs">
-    <slot />
-  </Primitive>
+  <Icon
+    :icon="icon"
+    :width="sizeMap[size]"
+    :height="sizeMap[size]"
+    :class="classes"
+    aria-hidden="true"
+    v-bind="$attrs"
+  />
 </template>

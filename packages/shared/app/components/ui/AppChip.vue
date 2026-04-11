@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Primitive } from "reka-ui";
 import { useRecipe } from "../../composables/useRecipe";
+import AppIcon from "./AppIcon.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -32,7 +33,7 @@ const classes = useRecipe("chip", props);
       aria-label="Remove"
       @click="$emit('close')"
     >
-      &#x2715;
+      <AppIcon icon="lucide:x" size="sm" />
     </button>
   </Primitive>
 </template>
