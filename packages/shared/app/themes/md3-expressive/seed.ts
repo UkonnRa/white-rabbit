@@ -76,12 +76,13 @@ const MD3_TO_WR_MAP: Record<string, string> = {
 };
 
 /**
- * Apply MD3 tokens as CSS custom properties on a target element.
+ * Apply seed-derived color tokens as CSS custom properties on a target element.
  *
  * Generates colors from the seed, then sets `--wr-<name>` on the element's
- * inline style for each mapped token.
+ * inline style for each mapped token. Works for any theme — the seed algorithm
+ * produces a full harmonious palette that maps to `--wr-*` variables.
  */
-export function applyMD3TokensToElement(
+export function applySeedTokensToElement(
   el: HTMLElement,
   seedHex: string,
   dark: boolean,
@@ -96,10 +97,15 @@ export function applyMD3TokensToElement(
 }
 
 /**
- * Remove all MD3 inline token overrides from an element.
+ * Remove all seed-derived inline token overrides from an element.
  */
-export function clearMD3TokensFromElement(el: HTMLElement): void {
+export function clearSeedTokensFromElement(el: HTMLElement): void {
   for (const wrKey of Object.values(MD3_TO_WR_MAP)) {
     el.style.removeProperty(`--wr-${wrKey}`);
   }
 }
+
+/** @deprecated Use applySeedTokensToElement */
+export const applyMD3TokensToElement = applySeedTokensToElement;
+/** @deprecated Use clearSeedTokensFromElement */
+export const clearMD3TokensFromElement = clearSeedTokensFromElement;

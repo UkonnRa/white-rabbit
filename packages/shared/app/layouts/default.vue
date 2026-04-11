@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { useMode } from "../composables/useMode";
 import { useAppTheme } from "../composables/useAppTheme";
 import AppButton from "../components/ui/AppButton.vue";
@@ -16,8 +16,6 @@ const {
   PALETTE,
   AVAILABLE_THEMES,
 } = useAppTheme();
-
-const isMD3 = computed(() => themeName.value === "md3-expressive");
 
 const drawerOpen = ref(false);
 const showPalette = ref(false);
@@ -53,8 +51,8 @@ const showPalette = ref(false);
           </AppButton>
         </div>
 
-        <!-- MD3 seed color picker -->
-        <div v-if="isMD3" class="relative">
+        <!-- Seed color picker -->
+        <div class="relative">
           <AppButton
             variant="ghost"
             size="sm"
@@ -117,6 +115,12 @@ const showPalette = ref(false);
             class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors"
           >
             <AppIcon icon="lucide:book-open" size="md" /> Journals
+          </NuxtLink>
+          <NuxtLink
+            to="/color-demo"
+            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors"
+          >
+            <AppIcon icon="lucide:palette" size="md" /> Color Demo
           </NuxtLink>
         </nav>
       </aside>

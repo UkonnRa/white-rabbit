@@ -12,6 +12,7 @@ import { tooltipRecipe } from "./recipes/tooltip";
 import { switchRecipe } from "./recipes/switch";
 import { iconRecipe } from "./recipes/icon";
 import { dataTableRecipe } from "./recipes/dataTable";
+import { tagInputRecipe } from "./recipes/tagInput";
 
 export const tailwindDefault: ThemeDefinition = {
   name: "tailwind-default",
@@ -29,6 +30,7 @@ export const tailwindDefault: ThemeDefinition = {
     switch: switchRecipe,
     icon: iconRecipe,
     dataTable: dataTableRecipe,
+    tagInput: tagInputRecipe,
   },
   stylesheets: ["./tokens.css"],
 };

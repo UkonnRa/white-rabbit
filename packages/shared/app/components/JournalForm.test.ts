@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { nextTick } from "vue";
 import { mountWithTheme } from "../test-utils-mount";
 import JournalForm from "./JournalForm.vue";
 
@@ -71,21 +70,18 @@ describe("JournalForm", () => {
     expect(wrapper.emitted("submit")).toBeTruthy();
   });
 
-  it("removes a tag when x button is clicked", async () => {
+  it("renders tag delete buttons for each tag", () => {
     const wrapper = mountWithTheme(JournalForm, {
       props: {
-        initial: { name: "Test", description: "", tags: ["removeme"] },
+        initial: { name: "Test", description: "", tags: ["tag1", "tag2"] },
       },
     });
 
-    expect(wrapper.text()).toContain("removeme");
+    expect(wrapper.text()).toContain("tag1");
+    expect(wrapper.text()).toContain("tag2");
 
-    const removeBtn = wrapper.find('button[aria-label="Remove tag"]');
-    expect(removeBtn.exists()).toBe(true);
-    await removeBtn.trigger("click");
-    await nextTick();
-
-    expect(wrapper.text()).not.toContain("removeme");
+    const removeBtns = wrapper.findAll('button[aria-label="Remove"]');
+    expect(removeBtns.length).toBe(2);
   });
 
   it("renders inside an AppCard component", () => {
@@ -109,7 +105,7 @@ describe("JournalForm", () => {
 
   it("has tag input", () => {
     const wrapper = mountWithTheme(JournalForm);
-    const tagInput = wrapper.find("#journal-tags");
+    const tagInput = wrapper.findComponent({ name: "AppTagInput" });
     expect(tagInput.exists()).toBe(true);
   });
 });

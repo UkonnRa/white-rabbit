@@ -8,7 +8,7 @@ import { md3Expressive } from "../themes/md3-expressive";
 import type { ThemeDefinition } from "../themes/types";
 import { THEME_KEY, MODE_KEY } from "../themes/types";
 import { computed, toValue, watchEffect } from "vue";
-import { useMode } from "../composables/useMode";
+import { useMode, _resetMode } from "../composables/useMode";
 
 /**
  * Simulates what the Nuxt plugin does: app-level provide.
@@ -38,6 +38,7 @@ function installThemePlugin(app: ReturnType<typeof createApp>) {
 
 beforeEach(() => {
   clearThemes();
+  _resetMode("light");
   delete document.documentElement.dataset.theme;
   delete document.documentElement.dataset.mode;
 });

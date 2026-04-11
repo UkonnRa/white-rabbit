@@ -5,7 +5,7 @@ import AppCard from "./ui/AppCard.vue";
 import AppInput from "./ui/AppInput.vue";
 import AppTextarea from "./ui/AppTextarea.vue";
 import AppButton from "./ui/AppButton.vue";
-import AppIcon from "./ui/AppIcon.vue";
+import AppTagInput from "./ui/AppTagInput.vue";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };
@@ -18,7 +18,6 @@ const emit = defineEmits<{
 
 const name = ref(props.initial?.name ?? "");
 const description = ref(props.initial?.description ?? "");
-const tagInput = ref("");
 const tags = ref<string[]>(props.initial?.tags ?? []);
 
 watch(
@@ -29,23 +28,6 @@ watch(
     tags.value = val?.tags ?? [];
   },
 );
-
-function addTag() {
-  const raw = tagInput.value.trim();
-  if (raw) {
-    for (const t of raw.split(/[, ]+/)) {
-      const trimmed = t.trim();
-      if (trimmed && !tags.value.includes(trimmed)) {
-        tags.value.push(trimmed);
-      }
-    }
-    tagInput.value = "";
-  }
-}
-
-function removeTag(tag: string) {
-  tags.value = tags.value.filter((t) => t !== tag);
-}
 
 function handleSubmit() {
   emit("submit", {
@@ -85,33 +67,8 @@ function handleSubmit() {
         />
       </div>
       <div>
-        <label for="journal-tags" class="block text-sm font-medium mb-1"
-          >Tags</label
-        >
-        <AppInput
-          id="journal-tags"
-          v-model="tagInput"
-          placeholder="Type a tag and press Enter…"
-          @keydown.enter.prevent="addTag"
-          @blur="addTag"
-        />
-        <div v-if="tags.length" class="flex flex-wrap gap-1 mt-2">
-          <span
-            v-for="tag in tags"
-            :key="tag"
-            class="inline-flex items-center gap-1 rounded-full bg-surface-variant text-on-surface-variant px-2 py-0.5 text-xs"
-          >
-            {{ tag }}
-            <button
-              type="button"
-              class="ml-0.5 hover:text-error cursor-pointer"
-              aria-label="Remove tag"
-              @click="removeTag(tag)"
-            >
-              <AppIcon icon="lucide:x" size="sm" />
-            </button>
-          </span>
-        </div>
+        <label class="block text-sm font-medium mb-1">Tags</label>
+        <AppTagInput v-model="tags" placeholder="Add tag…" />
       </div>
       <div class="flex justify-end gap-2">
         <AppButton type="button" variant="outlined" @click="$emit('cancel')">

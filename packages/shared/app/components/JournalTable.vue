@@ -7,6 +7,7 @@ import AppInput from "./ui/AppInput.vue";
 import AppButton from "./ui/AppButton.vue";
 import AppChip from "./ui/AppChip.vue";
 import AppIcon from "./ui/AppIcon.vue";
+import AppTagInput from "./ui/AppTagInput.vue";
 
 const props = defineProps<{
   journals: Journal[];
@@ -51,6 +52,16 @@ const filteredJournals = computed(() => {
       return true;
     })
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+});
+
+// ── All known tags (suggestions for tag input) ─────────────────────────────
+
+const allTags = computed(() => {
+  const tags = new Set<string>();
+  for (const j of props.journals) {
+    for (const t of j.tags) tags.add(t);
+  }
+  return [...tags].sort();
 });
 
 // ── Inline editing state ────────────────────────────────────────────────────
@@ -171,17 +182,11 @@ const columns: ColumnDef<Journal, unknown>[] = [
           />
         </td>
         <td class="px-3 py-2">
-          <!-- simplified tag input for inline row -->
-          <AppInput
-            :model-value="newForm.tags.join(', ')"
+          <AppTagInput
+            v-model="newForm.tags"
             size="sm"
-            placeholder="tag1, tag2…"
-            @change="
-              newForm.tags = ($event.target as HTMLInputElement).value
-                .split(/[, ]+/)
-                .map((t: string) => t.trim())
-                .filter(Boolean)
-            "
+            placeholder="Add tag…"
+            :suggestions="allTags"
           />
         </td>
         <td class="px-3 py-2">
@@ -227,15 +232,11 @@ const columns: ColumnDef<Journal, unknown>[] = [
     <!-- Tags cell -->
     <template #cell-tags="{ row }">
       <template v-if="editingId === row.original.id">
-        <AppInput
-          :model-value="editForm.tags.join(', ')"
+        <AppTagInput
+          v-model="editForm.tags"
           size="sm"
-          @change="
-            editForm.tags = ($event.target as HTMLInputElement).value
-              .split(/[, ]+/)
-              .map((t: string) => t.trim())
-              .filter(Boolean)
-          "
+          placeholder="Add tag…"
+          :suggestions="allTags"
         />
       </template>
       <div

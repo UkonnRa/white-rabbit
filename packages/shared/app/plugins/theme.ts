@@ -6,10 +6,7 @@ import { registerTheme } from "../themes/registry";
 import { getTheme } from "../themes/registry";
 import { tailwindDefault } from "../themes/tailwind-default";
 import { md3Expressive } from "../themes/md3-expressive";
-import {
-  applyMD3TokensToElement,
-  clearMD3TokensFromElement,
-} from "../themes/md3-expressive/seed";
+import { applySeedTokensToElement } from "../themes/md3-expressive/seed";
 import { THEME_KEY, MODE_KEY } from "../themes/types";
 
 /** Injection key for the active theme name — used by the theme switcher UI. */
@@ -48,15 +45,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       html.dataset.theme = themeName.value;
       html.dataset.mode = modeRef.value;
 
-      if (themeName.value === "md3-expressive") {
-        applyMD3TokensToElement(
-          html,
-          seedColor.value,
-          modeRef.value === "dark",
-        );
-      } else {
-        clearMD3TokensFromElement(html);
-      }
+      // Apply seed-derived color tokens for all themes.
+      // Dark mode is orthogonal to seed color — both are re-applied here.
+      applySeedTokensToElement(html, seedColor.value, modeRef.value === "dark");
     }
   });
 

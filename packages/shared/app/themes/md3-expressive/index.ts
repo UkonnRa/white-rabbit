@@ -13,6 +13,7 @@ import { tooltipRecipe } from "./recipes/tooltip";
 import { switchRecipe } from "./recipes/switch";
 import { iconRecipe } from "./recipes/icon";
 import { dataTableRecipe } from "./recipes/dataTable";
+import { tagInputRecipe } from "./recipes/tagInput";
 
 export const md3Expressive: ThemeDefinition = {
   name: "md3-expressive",
@@ -30,6 +31,7 @@ export const md3Expressive: ThemeDefinition = {
     switch: switchRecipe,
     icon: iconRecipe,
     dataTable: dataTableRecipe,
+    tagInput: tagInputRecipe,
   },
   directives: {
     ripple: rippleDirective,
