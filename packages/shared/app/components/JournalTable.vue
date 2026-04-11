@@ -1,5 +1,11 @@
 <script setup lang="ts">
+import { ref, computed, watch } from "vue";
+import type { ColumnDef } from "@tanstack/vue-table";
 import type { Journal, JournalFormData } from "../models";
+import AppDataTable from "./ui/AppDataTable.vue";
+import AppInput from "./ui/AppInput.vue";
+import AppButton from "./ui/AppButton.vue";
+import AppChip from "./ui/AppChip.vue";
 
 const props = defineProps<{
   journals: Journal[];
@@ -43,19 +49,8 @@ const filteredJournals = computed(() => {
         return false;
       return true;
     })
-    .sort((a, b) => {
-      return (a.name || "").localeCompare(b.name || "");
-    });
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 });
-
-// ── Headers ─────────────────────────────────────────────────────────────────
-
-const headers = [
-  { title: "Name", key: "name", sortable: false },
-  { title: "Description", key: "description", sortable: false },
-  { title: "Tags", key: "tags", sortable: false },
-  { title: "Actions", key: "actions", sortable: false, align: "end" as const },
-];
 
 // ── Inline editing state ────────────────────────────────────────────────────
 
@@ -95,223 +90,207 @@ function submitNew() {
   if (!newForm.value.name.trim()) return;
   emit("create", { ...newForm.value });
 }
+
+// ── TanStack columns ────────────────────────────────────────────────────────
+
+const columns: ColumnDef<Journal, unknown>[] = [
+  {
+    accessorKey: "name",
+    header: "Name",
+    enableSorting: false,
+  },
+  {
+    accessorKey: "description",
+    header: "Description",
+    enableSorting: false,
+  },
+  {
+    accessorKey: "tags",
+    header: "Tags",
+    enableSorting: false,
+  },
+  {
+    id: "actions",
+    header: "Actions",
+    enableSorting: false,
+  },
+];
 </script>
 
 <template>
-  <v-data-table
-    :items="filteredJournals"
-    :headers="headers"
-    :items-per-page="-1"
-    item-value="id"
-    density="compact"
-    hide-default-footer
-  >
-    <!-- ── Header cells with filter inputs ─────────────────────────────── -->
-    <template #header.name>
+  <AppDataTable :data="filteredJournals" :columns="columns">
+    <!-- Header filter slots -->
+    <template #header-name>
       <div class="py-1">
-        <div class="text-subtitle-2 font-weight-medium mb-1">Name</div>
-        <v-text-field
-          v-model="nameFilter"
-          placeholder="Filter name…"
-          density="compact"
-          variant="outlined"
-          hide-details
-          clearable
-        />
+        <div class="text-xs font-medium mb-1">Name</div>
+        <AppInput v-model="nameFilter" size="sm" placeholder="Filter name…" />
       </div>
     </template>
 
-    <template #header.description>
+    <template #header-description>
       <div class="py-1">
-        <div class="text-subtitle-2 font-weight-medium mb-1">Description</div>
-        <v-text-field
+        <div class="text-xs font-medium mb-1">Description</div>
+        <AppInput
           v-model="descFilter"
+          size="sm"
           placeholder="Filter description…"
-          density="compact"
-          variant="outlined"
-          hide-details
-          clearable
         />
       </div>
     </template>
 
-    <template #header.tags>
+    <template #header-tags>
       <div class="py-1">
-        <div class="text-subtitle-2 font-weight-medium mb-1">Tags</div>
-        <v-text-field
-          v-model="tagsFilter"
-          placeholder="Filter tags…"
-          density="compact"
-          variant="outlined"
-          hide-details
-          clearable
-        />
+        <div class="text-xs font-medium mb-1">Tags</div>
+        <AppInput v-model="tagsFilter" size="sm" placeholder="Filter tags…" />
       </div>
     </template>
 
-    <template #header.actions>
-      <div class="text-subtitle-2 font-weight-medium text-right py-1">
-        Actions
-      </div>
+    <template #header-actions>
+      <div class="text-xs font-medium text-right py-1">Actions</div>
     </template>
 
-    <!-- ── New row ──────────────────────────────────────────────────────── -->
-    <template #body.prepend>
-      <tr v-if="addingNew">
-        <td>
-          <v-text-field
+    <!-- New row -->
+    <template #body-prepend>
+      <tr v-if="addingNew" class="border-b border-outline-variant">
+        <td class="px-3 py-2">
+          <AppInput
             v-model="newForm.name"
+            size="sm"
             placeholder="Journal name"
-            density="compact"
-            variant="outlined"
-            hide-details
             autofocus
             @keyup.enter="submitNew"
           />
         </td>
-        <td>
-          <v-text-field
+        <td class="px-3 py-2">
+          <AppInput
             v-model="newForm.description"
+            size="sm"
             placeholder="Description"
-            density="compact"
-            variant="outlined"
-            hide-details
             @keyup.enter="submitNew"
           />
         </td>
-        <td>
-          <v-combobox
-            v-model="newForm.tags"
-            :delimiters="[',', ' ']"
-            multiple
-            chips
-            closable-chips
+        <td class="px-3 py-2">
+          <!-- simplified tag input for inline row -->
+          <AppInput
+            :model-value="newForm.tags.join(', ')"
+            size="sm"
             placeholder="tag1, tag2…"
-            density="compact"
-            variant="outlined"
-            hide-details
+            @change="
+              newForm.tags = ($event.target as HTMLInputElement).value
+                .split(/[, ]+/)
+                .map((t: string) => t.trim())
+                .filter(Boolean)
+            "
           />
         </td>
-        <td>
-          <div class="d-flex justify-end ga-1">
-            <v-btn
-              icon
-              size="small"
-              color="secondary"
+        <td class="px-3 py-2">
+          <div class="flex justify-end gap-1">
+            <AppButton
+              size="sm"
+              variant="solid"
               :disabled="!newForm.name.trim()"
               @click="submitNew"
             >
-              <v-icon>mdi-check</v-icon>
-            </v-btn>
-            <v-btn
-              icon
-              size="small"
-              variant="outlined"
-              @click="emit('cancelNew')"
-            >
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
+              &#x2713;
+            </AppButton>
+            <AppButton size="sm" variant="outlined" @click="emit('cancelNew')">
+              &#x2715;
+            </AppButton>
           </div>
         </td>
       </tr>
     </template>
 
-    <!-- ── Name cell ────────────────────────────────────────────────────── -->
-    <template #item.name="{ item }">
-      <v-text-field
-        v-if="editingId === item.id"
+    <!-- Name cell -->
+    <template #cell-name="{ row }">
+      <AppInput
+        v-if="editingId === row.original.id"
         v-model="editForm.name"
-        density="compact"
-        variant="outlined"
-        hide-details
+        size="sm"
       />
-      <span v-else class="font-weight-medium">{{ item.name }}</span>
+      <span v-else class="font-medium">{{ row.original.name }}</span>
     </template>
 
-    <!-- ── Description cell ─────────────────────────────────────────────── -->
-    <template #item.description="{ item }">
-      <v-text-field
-        v-if="editingId === item.id"
+    <!-- Description cell -->
+    <template #cell-description="{ row }">
+      <AppInput
+        v-if="editingId === row.original.id"
         v-model="editForm.description"
-        density="compact"
-        variant="outlined"
-        hide-details
+        size="sm"
       />
-      <span v-else class="text-medium-emphasis">
-        {{ item.description || "—" }}
+      <span v-else class="text-on-surface-variant">
+        {{ row.original.description || "—" }}
       </span>
     </template>
 
-    <!-- ── Tags cell ─────────────────────────────────────────────────────── -->
-    <template #item.tags="{ item }">
-      <v-combobox
-        v-if="editingId === item.id"
-        v-model="editForm.tags"
-        :delimiters="[',']"
-        multiple
-        chips
-        closable-chips
-        density="compact"
-        variant="outlined"
-        hide-details
-      />
-      <div v-else-if="item.tags.length" class="d-flex flex-wrap ga-1 py-1">
-        <v-chip
-          v-for="tag in item.tags"
+    <!-- Tags cell -->
+    <template #cell-tags="{ row }">
+      <template v-if="editingId === row.original.id">
+        <AppInput
+          :model-value="editForm.tags.join(', ')"
+          size="sm"
+          @change="
+            editForm.tags = ($event.target as HTMLInputElement).value
+              .split(/[, ]+/)
+              .map((t: string) => t.trim())
+              .filter(Boolean)
+          "
+        />
+      </template>
+      <div
+        v-else-if="row.original.tags.length"
+        class="flex flex-wrap gap-1 py-1"
+      >
+        <AppChip
+          v-for="tag in row.original.tags"
           :key="tag"
-          size="small"
           variant="tonal"
+          size="sm"
         >
           {{ tag }}
-        </v-chip>
+        </AppChip>
       </div>
-      <span v-else class="text-medium-emphasis">—</span>
+      <span v-else class="text-on-surface-variant">—</span>
     </template>
 
-    <!-- ── Actions cell ──────────────────────────────────────────────────── -->
-    <template #item.actions="{ item }">
-      <div class="d-flex justify-end ga-1">
-        <template v-if="editingId === item.id">
-          <v-btn
-            icon
-            size="x-small"
+    <!-- Actions cell -->
+    <template #cell-actions="{ row }">
+      <div class="flex justify-end gap-1">
+        <template v-if="editingId === row.original.id">
+          <AppButton
+            size="sm"
+            variant="solid"
             :disabled="!editForm.name.trim()"
-            @click="saveEdit(item.id)"
+            @click="saveEdit(row.original.id)"
           >
-            <v-icon>mdi-check</v-icon>
-          </v-btn>
-          <v-btn icon size="small" variant="outlined" @click="cancelEdit">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
+            &#x2713;
+          </AppButton>
+          <AppButton size="sm" variant="outlined" @click="cancelEdit">
+            &#x2715;
+          </AppButton>
         </template>
         <template v-else>
-          <v-btn
-            color="secondary"
-            icon
-            size="x-small"
+          <AppButton
+            size="sm"
             variant="outlined"
-            @click="startEdit(item)"
+            @click="startEdit(row.original)"
           >
-            <v-icon>mdi-pencil</v-icon>
-          </v-btn>
-          <v-btn
-            icon
-            size="x-small"
-            color="error"
+            &#x270E;
+          </AppButton>
+          <AppButton
+            size="sm"
             variant="outlined"
-            @click="emit('delete', item)"
+            class="text-error border-error"
+            @click="emit('delete', row.original)"
           >
-            <v-icon>mdi-delete</v-icon>
-          </v-btn>
+            &#x1F5D1;
+          </AppButton>
         </template>
       </div>
     </template>
 
-    <!-- ── Empty state ───────────────────────────────────────────────────── -->
-    <template #no-data>
-      <div class="text-center text-medium-emphasis py-6">
-        No journals found.
-      </div>
+    <template #empty>
+      <span class="text-on-surface-variant">No journals found.</span>
     </template>
-  </v-data-table>
+  </AppDataTable>
 </template>

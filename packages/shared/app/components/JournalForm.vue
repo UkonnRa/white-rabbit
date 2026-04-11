@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { ref, watch } from "vue";
 import type { JournalFormData } from "../models";
+import AppCard from "./ui/AppCard.vue";
+import AppInput from "./ui/AppInput.vue";
+import AppTextarea from "./ui/AppTextarea.vue";
+import AppButton from "./ui/AppButton.vue";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };
@@ -12,6 +17,7 @@ const emit = defineEmits<{
 
 const name = ref(props.initial?.name ?? "");
 const description = ref(props.initial?.description ?? "");
+const tagInput = ref("");
 const tags = ref<string[]>(props.initial?.tags ?? []);
 
 watch(
@@ -23,6 +29,23 @@ watch(
   },
 );
 
+function addTag() {
+  const raw = tagInput.value.trim();
+  if (raw) {
+    for (const t of raw.split(/[, ]+/)) {
+      const trimmed = t.trim();
+      if (trimmed && !tags.value.includes(trimmed)) {
+        tags.value.push(trimmed);
+      }
+    }
+    tagInput.value = "";
+  }
+}
+
+function removeTag(tag: string) {
+  tags.value = tags.value.filter((t) => t !== tag);
+}
+
 function handleSubmit() {
   emit("submit", {
     name: name.value,
@@ -33,56 +56,70 @@ function handleSubmit() {
 </script>
 
 <template>
-  <v-card>
-    <v-card-title class="pt-4 px-4">
+  <AppCard variant="outlined">
+    <h2 class="text-lg font-semibold mb-4">
       {{ initial ? "Edit Journal" : "New Journal" }}
-    </v-card-title>
-    <v-card-text>
-      <form class="d-flex flex-column ga-4" @submit.prevent="handleSubmit">
-        <v-text-field
+    </h2>
+    <form class="flex flex-col gap-4" @submit.prevent="handleSubmit">
+      <div>
+        <label for="journal-name" class="block text-sm font-medium mb-1"
+          >Name</label
+        >
+        <AppInput
           id="journal-name"
           v-model="name"
-          label="Name"
-          required
           placeholder="Journal name"
-          variant="outlined"
-          density="compact"
+          required
         />
-        <v-textarea
+      </div>
+      <div>
+        <label for="journal-description" class="block text-sm font-medium mb-1"
+          >Description</label
+        >
+        <AppTextarea
           id="journal-description"
           v-model="description"
-          label="Description"
           placeholder="Optional description"
-          variant="outlined"
-          density="compact"
           :rows="3"
         />
-        <v-combobox
+      </div>
+      <div>
+        <label for="journal-tags" class="block text-sm font-medium mb-1"
+          >Tags</label
+        >
+        <AppInput
           id="journal-tags"
-          v-model="tags"
-          :delimiters="[',', ' ']"
-          label="Tags"
-          multiple
-          chips
-          closable-chips
-          placeholder="tag1, tag2…"
-          variant="outlined"
-          density="compact"
+          v-model="tagInput"
+          placeholder="Type a tag and press Enter…"
+          @keydown.enter.prevent="addTag"
+          @blur="addTag"
         />
-        <div class="d-flex justify-end ga-2">
-          <v-btn
-            type="button"
-            variant="outlined"
-            prepend-icon="mdi-close"
-            @click="$emit('cancel')"
+        <div v-if="tags.length" class="flex flex-wrap gap-1 mt-2">
+          <span
+            v-for="tag in tags"
+            :key="tag"
+            class="inline-flex items-center gap-1 rounded-full bg-surface-variant text-on-surface-variant px-2 py-0.5 text-xs"
           >
-            Cancel
-          </v-btn>
-          <v-btn type="submit" prepend-icon="mdi-content-save">
-            {{ initial ? "Update" : "Create" }}
-          </v-btn>
+            {{ tag }}
+            <button
+              type="button"
+              class="ml-0.5 hover:text-error cursor-pointer"
+              aria-label="Remove tag"
+              @click="removeTag(tag)"
+            >
+              &#x2715;
+            </button>
+          </span>
         </div>
-      </form>
-    </v-card-text>
-  </v-card>
+      </div>
+      <div class="flex justify-end gap-2">
+        <AppButton type="button" variant="outlined" @click="$emit('cancel')">
+          Cancel
+        </AppButton>
+        <AppButton type="submit" variant="solid">
+          {{ initial ? "Update" : "Create" }}
+        </AppButton>
+      </div>
+    </form>
+  </AppCard>
 </template>

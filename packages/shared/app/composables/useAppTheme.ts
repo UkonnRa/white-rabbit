@@ -8,7 +8,6 @@ import {
   type DynamicScheme,
 } from "@material/material-color-utilities";
 import { useLocalStorage } from "@vueuse/core";
-import { useTheme } from "vuetify";
 
 // ── Safe colors: excludes red/orange/yellow to avoid conflict with
 //    error (red) and warning (yellow/amber) semantic colors ──────────────────
@@ -56,24 +55,19 @@ export function buildTheme(hex: string, dark: boolean) {
 
 // ── Composable ──────────────────────────────────────────────────────────────
 
+/**
+ * Seed color persistence.
+ *
+ * Phase 4 (md3-expressive) will use `applySeed` to regenerate MD3 tokens
+ * at runtime. For tailwind-default theme, the seed is stored but has no
+ * visual effect.
+ */
 export function useAppTheme() {
-  const theme = useTheme();
   const seed = useLocalStorage("app-seed-color", DEFAULT_SEED);
 
   function applySeed(hex: string) {
     seed.value = hex;
-    if (theme.themes.value.light) {
-      Object.assign(
-        theme.themes.value.light.colors,
-        buildTheme(hex, false).colors,
-      );
-    }
-    if (theme.themes.value.dark) {
-      Object.assign(
-        theme.themes.value.dark.colors,
-        buildTheme(hex, true).colors,
-      );
-    }
+    // MD3 token injection will be added in Phase 4.
   }
 
   return { seed, applySeed, PALETTE };

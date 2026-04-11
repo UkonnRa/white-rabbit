@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref, computed } from "vue";
 import type { JournalFilter, JournalFormData, Journal } from "../models";
+import AppButton from "../components/ui/AppButton.vue";
 
 const currentFilter = ref<JournalFilter>({});
 const {
@@ -51,24 +53,29 @@ async function handleDelete(journal: Journal) {
 </script>
 
 <template>
-  <div class="d-flex flex-column ga-4">
-    <div class="d-flex align-center justify-space-between">
-      <h1 class="text-h5 font-weight-bold">Journals</h1>
-      <v-btn
-        color="primary"
+  <div class="flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl font-bold">Journals</h1>
+      <AppButton
+        variant="solid"
         :disabled="addingNew"
-        prepend-icon="mdi-plus"
         @click="addingNew = true"
       >
-        New Journal
-      </v-btn>
+        + New Journal
+      </AppButton>
     </div>
 
-    <v-alert v-if="displayError" type="error" variant="tonal" closable>
+    <div
+      v-if="displayError"
+      class="rounded-md border border-error bg-error/10 text-error px-4 py-3 text-sm"
+    >
       {{ displayError }}
-    </v-alert>
+    </div>
 
-    <div v-if="status === 'pending'" class="text-center text-medium-emphasis">
+    <div
+      v-if="status === 'pending'"
+      class="text-center text-on-surface-variant"
+    >
       Loading...
     </div>
     <JournalTable

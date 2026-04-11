@@ -1,15 +1,3 @@
-@layer theme,
-  base,
-  vuetify-core,
-  vuetify-components,
-  components,
-  vuetify-overrides,
-  vuetify-utilities,
-  vuetify-final,
-  utilities;
-
-@import "vuetify/styles";
-@import "@mdi/font/css/materialdesignicons.css";
 @import "tailwindcss";
 @import "../../themes/tailwind-default/tokens.css";
 @source "../..";

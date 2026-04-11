@@ -1,81 +1,69 @@
 <script setup lang="ts">
-import { useTheme } from "vuetify";
+import { ref, computed } from "vue";
+import { useMode } from "../composables/useMode";
+import AppButton from "../components/ui/AppButton.vue";
 
-const theme = useTheme();
-const isDark = computed(() => theme.global.current.value.dark);
-function toggleDark() {
-  theme.global.name.value = isDark.value ? "light" : "dark";
-}
+const { mode, toggle: toggleDark } = useMode();
+const isDark = computed(() => mode.value === "dark");
 
-const drawer = ref<boolean | null>(null);
-
-const { seed, applySeed, PALETTE } = useAppTheme();
+const drawerOpen = ref(false);
 </script>
 
 <template>
-  <v-app-bar>
-    <v-app-bar-nav-icon @click="drawer = !drawer" />
-    <v-app-bar-title>White Rabbit</v-app-bar-title>
+  <div class="min-h-screen flex flex-col bg-background text-on-background">
+    <!-- App bar -->
+    <header
+      class="sticky top-0 z-40 flex items-center gap-2 h-14 px-4 border-b border-outline-variant bg-surface"
+    >
+      <AppButton
+        variant="ghost"
+        size="sm"
+        aria-label="Toggle navigation"
+        @click="drawerOpen = !drawerOpen"
+      >
+        &#9776;
+      </AppButton>
+      <h1 class="text-base font-semibold">White Rabbit</h1>
 
-    <template #append>
-      <!-- Theme color picker -->
-      <v-menu :close-on-content-click="false" max-width="220">
-        <template #activator="{ props }">
-          <v-btn icon variant="text" v-bind="props">
-            <v-icon>mdi-palette</v-icon>
-          </v-btn>
-        </template>
-        <v-card>
-          <v-card-title class="text-body-2 pa-3 pb-1">Theme Color</v-card-title>
-          <v-list density="compact" nav>
-            <v-list-item
-              v-for="color in PALETTE"
-              :key="color.hex"
-              :title="color.label"
-              :active="seed === color.hex"
-              rounded="lg"
-              @click="applySeed(color.hex)"
-            >
-              <template #prepend>
-                <v-avatar :color="color.hex" size="20" />
-              </template>
-              <template #append>
-                <v-icon v-if="seed === color.hex" size="16">mdi-check</v-icon>
-              </template>
-            </v-list-item>
-          </v-list>
-        </v-card>
-      </v-menu>
+      <div class="ml-auto flex items-center gap-1">
+        <AppButton
+          variant="ghost"
+          size="sm"
+          :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="toggleDark"
+        >
+          {{ isDark ? "&#x1F319;" : "&#x2600;&#xFE0F;" }}
+        </AppButton>
+      </div>
+    </header>
 
-      <!-- Dark mode toggle -->
-      <v-btn icon variant="text" @click="toggleDark">
-        <v-icon>{{
-          isDark ? "mdi-weather-night" : "mdi-white-balance-sunny"
-        }}</v-icon>
-      </v-btn>
-    </template>
-  </v-app-bar>
+    <div class="flex flex-1">
+      <!-- Navigation drawer -->
+      <aside
+        v-if="drawerOpen"
+        class="w-60 shrink-0 border-r border-outline-variant bg-surface p-2"
+      >
+        <nav>
+          <NuxtLink
+            to="/"
+            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors"
+          >
+            &#x1F4D6; Journals
+          </NuxtLink>
+        </nav>
+      </aside>
 
-  <v-navigation-drawer v-model="drawer">
-    <v-list nav density="compact">
-      <v-list-item
-        prepend-icon="mdi-book-open-variant"
-        title="Journals"
-        to="/"
-        rounded="lg"
-      />
-    </v-list>
-  </v-navigation-drawer>
-
-  <v-main>
-    <v-container>
-      <slot />
-    </v-container>
-  </v-main>
-
-  <v-footer border color="tertiary" class="flex-0">
-    <div class="flex-1-0-100 text-center">
-      {{ new Date().getFullYear() }} — <strong>White Rabbit</strong>, Ukonn Ra
+      <!-- Main content -->
+      <main class="flex-1 p-4 max-w-5xl mx-auto w-full">
+        <slot />
+      </main>
     </div>
-  </v-footer>
+
+    <!-- Footer -->
+    <footer
+      class="flex-none border-t border-outline-variant px-4 py-3 text-center text-sm text-on-surface-variant"
+    >
+      {{ new Date().getFullYear() }} — <strong>White Rabbit</strong>, Ukonn Ra
+    </footer>
+  </div>
 </template>
