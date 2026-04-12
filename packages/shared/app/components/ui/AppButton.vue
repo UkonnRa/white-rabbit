@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { Component } from "vue";
+import { ref } from "vue";
 import { Primitive } from "reka-ui";
 import { useRecipe } from "../../composables/useRecipe";
+import { useRipple } from "../../composables/useRipple";
 
 const props = withDefaults(
   defineProps<{
@@ -18,10 +20,12 @@ const props = withDefaults(
 );
 
 const classes = useRecipe("button", props);
+const elRef = ref<HTMLElement | null>(null);
+useRipple(elRef);
 </script>
 
 <template>
-  <Primitive :as="as" :class="classes" :disabled v-bind="$attrs">
+  <Primitive ref="elRef" :as="as" :class="classes" :disabled v-bind="$attrs">
     <slot />
   </Primitive>
 </template>

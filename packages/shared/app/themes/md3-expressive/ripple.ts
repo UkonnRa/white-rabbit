@@ -1,10 +1,10 @@
 import type { Directive, DirectiveBinding } from "vue";
 
-interface RippleOptions {
+export interface RippleOptions {
   disabled?: boolean;
 }
 
-interface RippleHTMLElement extends HTMLElement {
+export interface RippleHTMLElement extends HTMLElement {
   _rippleCleanup?: () => void;
 }
 
@@ -60,7 +60,7 @@ function createRipple(event: PointerEvent, el: HTMLElement) {
   el.addEventListener("pointerleave", remove, { once: true });
 }
 
-function setupRipple(el: RippleHTMLElement) {
+export function setupRipple(el: RippleHTMLElement) {
   // Ensure element can contain the absolute-positioned ripple
   const position = getComputedStyle(el).position;
   if (position === "static") {

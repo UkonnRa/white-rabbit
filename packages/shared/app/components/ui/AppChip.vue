@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { Primitive } from "reka-ui";
 import { useRecipe } from "../../composables/useRecipe";
+import { useRipple } from "../../composables/useRipple";
 import AppIcon from "./AppIcon.vue";
 
 const props = withDefaults(
@@ -21,10 +23,12 @@ defineEmits<{
 }>();
 
 const classes = useRecipe("chip", props);
+const elRef = ref<HTMLElement | null>(null);
+useRipple(elRef);
 </script>
 
 <template>
-  <Primitive as="span" :class="classes" v-bind="$attrs">
+  <Primitive ref="elRef" as="span" :class="classes" v-bind="$attrs">
     <slot />
     <button
       v-if="closable"
