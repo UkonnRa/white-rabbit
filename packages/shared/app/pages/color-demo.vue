@@ -2,6 +2,10 @@
 import AppButton from "../components/ui/AppButton.vue";
 import AppChip from "../components/ui/AppChip.vue";
 import AppCard from "../components/ui/AppCard.vue";
+import { useAppTheme } from "../composables/useAppTheme";
+
+const { themeName } = useAppTheme();
+const isMD3 = computed(() => themeName.value === "md3-expressive");
 
 const COLOR_ROLES = [
   { name: "Primary", bg: "bg-primary", fg: "text-on-primary" },
@@ -75,6 +79,21 @@ const CONTAINER_ROLES = [
       <strong>dark mode is orthogonal to theme color</strong> — every seed color
       works in both light and dark.
     </p>
+    <AppCard variant="outlined" class="text-sm">
+      <h2 class="font-semibold mb-1">
+        {{ isMD3 ? "MD3 Expressive" : "Tailwind Default" }} — Color Strategy
+      </h2>
+      <p v-if="isMD3" class="text-on-surface-variant">
+        <strong>Single seed derives everything.</strong> Changing the seed color
+        shifts primary, secondary, tertiary, and surfaces (which carry a subtle
+        primary tint). All colors are harmonious by algorithm.
+      </p>
+      <p v-else class="text-on-surface-variant">
+        <strong>Seed picks the accent hue only.</strong> Changing the seed color
+        shifts primary buttons/links. Surfaces stay on a fixed neutral scale —
+        clean and independent from the accent. Secondary is always neutral.
+      </p>
+    </AppCard>
 
     <!-- Buttons -->
     <AppCard variant="outlined">

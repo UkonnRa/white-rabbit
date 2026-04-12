@@ -6,7 +6,14 @@ import { registerTheme } from "../themes/registry";
 import { getTheme } from "../themes/registry";
 import { tailwindDefault } from "../themes/tailwind-default";
 import { md3Expressive } from "../themes/md3-expressive";
-import { applySeedTokensToElement } from "../themes/md3-expressive/seed";
+import {
+  applySeedTokensToElement as applyMD3Seed,
+  clearSeedTokensFromElement as clearMD3Seed,
+} from "../themes/md3-expressive/seed";
+import {
+  applyTailwindTokensToElement,
+  clearTailwindTokensFromElement,
+} from "../themes/tailwind-default/seed";
 import { THEME_KEY, MODE_KEY } from "../themes/types";
 
 /** Injection key for the active theme name — used by the theme switcher UI. */
@@ -14,7 +21,7 @@ export const THEME_NAME_KEY = Symbol("wr-theme-name") as InjectionKey<
   Ref<string>
 >;
 
-/** Injection key for the MD3 seed color — used by the seed color picker UI. */
+/** Injection key for the seed color — used by the seed color picker UI. */
 export const SEED_COLOR_KEY = Symbol("wr-seed-color") as InjectionKey<
   Ref<string>
 >;
@@ -38,16 +45,24 @@ export default defineNuxtPlugin((nuxtApp) => {
   const themeDef = computed(() => getTheme(themeName.value));
   const modeRef = computed(() => toValue(mode));
 
-  // Sync data attributes on <html> and apply MD3 dynamic tokens
+  // Sync data attributes on <html> and apply per-theme seed tokens.
+  // Each theme has its own seed strategy:
+  //   - md3-expressive: SchemeTonalSpot derives all 29+ roles from seed
+  //   - tailwind-default: seed picks accent hue; surfaces stay neutral
   watchEffect(() => {
     if (typeof document !== "undefined") {
       const html = document.documentElement;
+      const dark = modeRef.value === "dark";
       html.dataset.theme = themeName.value;
       html.dataset.mode = modeRef.value;
 
-      // Apply seed-derived color tokens for all themes.
-      // Dark mode is orthogonal to seed color — both are re-applied here.
-      applySeedTokensToElement(html, seedColor.value, modeRef.value === "dark");
+      if (themeName.value === "md3-expressive") {
+        clearTailwindTokensFromElement(html);
+        applyMD3Seed(html, seedColor.value, dark);
+      } else {
+        clearMD3Seed(html);
+        applyTailwindTokensToElement(html, seedColor.value, dark);
+      }
     }
   });
 
