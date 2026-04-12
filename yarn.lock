@@ -3478,12 +3478,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:>=20.0.0, @types/node@npm:^25.5.2":
+"@types/node@npm:*, @types/node@npm:>=20.0.0":
   version: 25.5.2
   resolution: "@types/node@npm:25.5.2"
   dependencies:
     undici-types: "npm:~7.18.0"
   checksum: 10c0/11e41a85401724cd1a4de6fb7bd4264ec46db10c09fc8cf8d41de4ede0a7063db458348f859ead4ec0929906aa26aaf45a5fef3aa59742ca0521cda9cee52377
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^25.6.0":
+  version: 25.6.0
+  resolution: "@types/node@npm:25.6.0"
+  dependencies:
+    undici-types: "npm:~7.19.0"
+  checksum: 10c0/d2d2015630ff098a201407f55f5077a20270ae4f465c739b40865cd9933b91b9c5d2b85568eadaf3db0801b91e267333ca7eb39f007428b173d1cdab4b339ac5
   languageName: node
   linkType: hard
 
@@ -7517,10 +7526,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"globals@npm:^17.3.0, globals@npm:^17.4.0":
+"globals@npm:^17.3.0":
   version: 17.4.0
   resolution: "globals@npm:17.4.0"
   checksum: 10c0/2be9e8c2b9035836f13d420b22f0247a328db82967d3bebfc01126d888ed609305f06c05895914e969653af5c6ba35fd7a0920f3e6c869afa60666c810630feb
+  languageName: node
+  linkType: hard
+
+"globals@npm:^17.5.0":
+  version: 17.5.0
+  resolution: "globals@npm:17.5.0"
+  checksum: 10c0/92828102ed2f5637907725f0478038bed02fc83e9fc89300bb753639ba7c022b6c02576fc772117302b431b204591db1f2fa909d26f3f0a9852cc856a941df3f
   languageName: node
   linkType: hard
 
@@ -11079,12 +11095,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prettier@npm:^3.2.5, prettier@npm:^3.8.1":
+"prettier@npm:^3.2.5":
   version: 3.8.1
   resolution: "prettier@npm:3.8.1"
   bin:
     prettier: bin/prettier.cjs
   checksum: 10c0/33169b594009e48f570471271be7eac7cdcf88a209eed39ac3b8d6d78984039bfa9132f82b7e6ba3b06711f3bfe0222a62a1bfb87c43f50c25a83df1b78a2c42
+  languageName: node
+  linkType: hard
+
+"prettier@npm:^3.8.2":
+  version: 3.8.2
+  resolution: "prettier@npm:3.8.2"
+  bin:
+    prettier: bin/prettier.cjs
+  checksum: 10c0/2d64bd01d269c8dd6d8c423a2a2e1fb88230a53aac523204b327de40059ccf8bd8e6fe70b8ce6154b97ed4442e9fd878504ff8a5330f3a4f64bd13d1576f7652
   languageName: node
   linkType: hard
 
@@ -11641,16 +11666,16 @@ __metadata:
     "@eslint/json": "npm:^1.2.0"
     "@eslint/markdown": "npm:^8.0.1"
     "@tailwindcss/vite": "npm:^4.2.2"
-    "@types/node": "npm:^25.5.2"
+    "@types/node": "npm:^25.6.0"
     eslint: "npm:^10.2.0"
     eslint-config-prettier: "npm:^10.1.8"
     eslint-plugin-vue: "npm:^10.8.0"
-    globals: "npm:^17.4.0"
+    globals: "npm:^17.5.0"
     jiti: "npm:^2.6.1"
     nuxi: "npm:^3.34.0"
-    prettier: "npm:^3.8.1"
+    prettier: "npm:^3.8.2"
     sass-embedded: "npm:^1.99.0"
-    shadcn-vue: "npm:^2.5.3"
+    shadcn-vue: "npm:^2.6.0"
     tailwindcss: "npm:^4.2.2"
     typescript-eslint: "npm:^8.58.1"
     vue-eslint-parser: "npm:^10.4.0"
@@ -12066,9 +12091,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"shadcn-vue@npm:^2.5.3":
-  version: 2.5.3
-  resolution: "shadcn-vue@npm:2.5.3"
+"shadcn-vue@npm:^2.6.0":
+  version: 2.6.0
+  resolution: "shadcn-vue@npm:2.6.0"
   dependencies:
     "@dotenvx/dotenvx": "npm:^1.51.1"
     "@modelcontextprotocol/sdk": "npm:^1.24.3"
@@ -12107,7 +12132,7 @@ __metadata:
     zod-to-json-schema: "npm:^3.25.0"
   bin:
     shadcn-vue: dist/index.js
-  checksum: 10c0/ff7963f88b768aedc2ba657d747fd818beb11c6a5d78bd8eadb8a12ae43a230e75bf4c51cef1cf1eb956d42a1f90509ecc2efabdae86d6bcf096919b9c749a7e
+  checksum: 10c0/6f7ddad78aba03855ee4b65787dea027f047a7f9672138de11a73a1d4ebbd53ca6859a43c655076bc150e7d3623df00fde98eb08c4a20d9ec6ed1d0917a3fd01
   languageName: node
   linkType: hard
 
@@ -13055,6 +13080,13 @@ __metadata:
   version: 7.18.2
   resolution: "undici-types@npm:7.18.2"
   checksum: 10c0/85a79189113a238959d7a647368e4f7c5559c3a404ebdb8fc4488145ce9426fcd82252a844a302798dfc0e37e6fb178ff481ed03bc4caf634c5757d9ef43521d
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~7.19.0":
+  version: 7.19.2
+  resolution: "undici-types@npm:7.19.2"
+  checksum: 10c0/7159f10546f9f6c47d36776bb1bbf8671e87c1e587a6fee84ae1f111ae8de4f914efa8ca0dfcd224f4f4a9dfc3f6028f627ccb5ddaccf82d7fd54671b89fac3e
   languageName: node
   linkType: hard
 

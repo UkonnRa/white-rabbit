@@ -17,25 +17,18 @@ const {
   AVAILABLE_THEMES,
 } = useAppTheme();
 
-const drawerOpen = ref(false);
 const showPalette = ref(false);
 </script>
 
 <template>
   <div class="min-h-screen flex flex-col bg-background text-on-background">
-    <!-- App bar -->
+    <!-- App header -->
     <header
       class="sticky top-0 z-40 flex items-center gap-2 h-14 px-4 border-b border-outline-variant bg-surface"
     >
-      <AppButton
-        variant="ghost"
-        size="sm"
-        aria-label="Toggle navigation"
-        @click="drawerOpen = !drawerOpen"
-      >
-        <AppIcon icon="lucide:menu" size="md" />
-      </AppButton>
-      <h1 class="text-base font-semibold">White Rabbit</h1>
+      <NuxtLink to="/" class="text-base font-semibold text-on-surface">
+        White Rabbit
+      </NuxtLink>
 
       <div class="ml-auto flex items-center gap-2">
         <!-- Theme switcher -->
@@ -88,6 +81,14 @@ const showPalette = ref(false);
                 "
               />
             </div>
+            <!-- Secret color demo link -->
+            <NuxtLink
+              to="/color-demo"
+              class="block mt-2 pt-2 border-t border-outline-variant text-xs text-on-surface-variant/50 hover:text-primary text-center transition-colors"
+              @click="showPalette = false"
+            >
+              Color reference
+            </NuxtLink>
           </div>
         </div>
 
@@ -103,33 +104,10 @@ const showPalette = ref(false);
       </div>
     </header>
 
-    <div class="flex flex-1">
-      <!-- Navigation drawer -->
-      <aside
-        v-if="drawerOpen"
-        class="w-60 shrink-0 border-r border-outline-variant bg-surface p-2"
-      >
-        <nav>
-          <NuxtLink
-            to="/"
-            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors"
-          >
-            <AppIcon icon="lucide:book-open" size="md" /> Journals
-          </NuxtLink>
-          <NuxtLink
-            to="/color-demo"
-            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors"
-          >
-            <AppIcon icon="lucide:palette" size="md" /> Color Demo
-          </NuxtLink>
-        </nav>
-      </aside>
-
-      <!-- Main content -->
-      <main class="flex-1 p-4 max-w-5xl mx-auto w-full">
-        <slot />
-      </main>
-    </div>
+    <!-- Main content -->
+    <main class="flex-1 p-4 max-w-5xl mx-auto w-full">
+      <slot />
+    </main>
 
     <!-- Footer -->
     <footer

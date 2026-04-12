@@ -53,7 +53,7 @@ function mountWithRipple(
   document.body.appendChild(root);
   app.mount(root);
 
-  buttonEl = root.querySelector("button") as RippleHTMLElement;
+  const buttonEl = root.querySelector("button") as RippleHTMLElement;
 
   return {
     el: buttonEl,

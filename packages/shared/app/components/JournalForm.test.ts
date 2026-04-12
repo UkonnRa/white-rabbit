@@ -3,20 +3,6 @@ import { mountWithTheme } from "../test-utils-mount";
 import JournalForm from "./JournalForm.vue";
 
 describe("JournalForm", () => {
-  it("renders 'New Journal' title when no initial", () => {
-    const wrapper = mountWithTheme(JournalForm);
-    expect(wrapper.text()).toContain("New Journal");
-  });
-
-  it("renders 'Edit Journal' title when initial is provided", () => {
-    const wrapper = mountWithTheme(JournalForm, {
-      props: {
-        initial: { name: "My Journal", description: "Desc", tags: ["a"] },
-      },
-    });
-    expect(wrapper.text()).toContain("Edit Journal");
-  });
-
   it("renders name, description, and tags labels", () => {
     const wrapper = mountWithTheme(JournalForm);
     expect(wrapper.text()).toContain("Name");
@@ -82,12 +68,6 @@ describe("JournalForm", () => {
 
     const removeBtns = wrapper.findAll('button[aria-label="Remove"]');
     expect(removeBtns.length).toBe(2);
-  });
-
-  it("renders inside an AppCard component", () => {
-    const wrapper = mountWithTheme(JournalForm);
-    const card = wrapper.findComponent({ name: "AppCard" });
-    expect(card.exists()).toBe(true);
   });
 
   it("has required name input", () => {

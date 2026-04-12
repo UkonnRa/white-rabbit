@@ -72,9 +72,12 @@ function cls(variant: string, extra?: Record<string, string>) {
 const rootClasses = computed(() =>
   cls("root", { size: props.size, disabled: props.disabled }),
 );
-const chipClasses = computed(() => cls("chip", { size: props.size }));
+const chipClasses = computed(() => {
+  const recipe = theme.value.recipes.chip;
+  return recipe ? resolveRecipe(recipe, { variant: "tonal", size: "sm" }) : [];
+});
 const deleteClasses = computed(() => cls("delete"));
-const inputClasses = computed(() => cls("input", { size: props.size }));
+const inputClasses = computed(() => cls("input"));
 const contentClasses = computed(() => cls("content"));
 const itemClasses = computed(() => cls("item"));
 const emptyClasses = computed(() => cls("empty"));
