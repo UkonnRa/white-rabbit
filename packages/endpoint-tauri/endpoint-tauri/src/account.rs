@@ -190,6 +190,39 @@ pub async fn delete_account(state: tauri::State<'_, AppState>, id: String) -> Re
     Ok(())
 }
 
+// ── ARCHIVE /accounts/:id ───────────────────────────────────────
+
+#[tauri::command]
+pub async fn archive_account(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<AccountResponse, String> {
+    let mut sess = state.new_session();
+    let account_id = domain::account::AccountId::from_value(&id);
+
+    let cmd = domain::account::command::AccountCommandArchive {
+        ids: HashSet::from([account_id]),
+        archived_at: chrono::Utc::now(),
+    };
+
+    let result = state
+        .account_service
+        .handle(
+            &mut sess,
+            domain::account::command::AccountCommand::Archive(cmd),
+        )
+        .await
+        .map_err(CommandError::from_domain)?;
+
+    let account = result
+        .entities
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("account {id} not found after archive"))?;
+
+    Ok(AccountResponse::from_account(&account))
+}
+
 fn parse_account_type(s: &str) -> Option<domain::account::AccountType> {
     match s.to_lowercase().as_str() {
         "asset" => Some(domain::account::AccountType::Asset),

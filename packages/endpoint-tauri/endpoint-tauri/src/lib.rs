@@ -20,6 +20,7 @@ pub fn register_handlers<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri
         account::list_accounts,
         account::update_account,
         account::delete_account,
+        account::archive_account,
     ])
 }
 
