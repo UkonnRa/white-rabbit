@@ -21,7 +21,8 @@ export interface Account {
 
 export interface CreateAccountRequest {
   journal_id: string;
-  parent_id: string;
+  parent_id: string | null;
+  type: AccountType;
   name: string;
   description?: string;
   tags?: string[];
@@ -38,7 +39,7 @@ export interface AccountFilter {
   journal_id?: string;
   parent_id?: string;
   name?: string;
-  type?: string;
+  type?: AccountType | string;
   tag?: string;
   fullText?: string;
 }
