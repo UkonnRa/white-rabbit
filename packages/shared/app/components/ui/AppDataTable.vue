@@ -4,12 +4,14 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getExpandedRowModel,
   useVueTable,
 } from "@tanstack/vue-table";
 import type {
   ColumnDef,
   SortingState,
   ColumnFiltersState,
+  ExpandedState,
 } from "@tanstack/vue-table";
 import { ref, computed } from "vue";
 import { resolveRecipe } from "../../composables/useRecipe";
@@ -18,10 +20,13 @@ import { useTheme } from "../../composables/useTheme";
 const props = defineProps<{
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
+  getSubRows?: (row: TData) => TData[];
+  enableExpanding?: boolean;
 }>();
 
 const sorting = ref<SortingState>([]);
 const columnFilters = ref<ColumnFiltersState>([]);
+const expanded = ref<ExpandedState>({});
 
 const table = useVueTable({
   get data() {
@@ -37,6 +42,13 @@ const table = useVueTable({
     get columnFilters() {
       return columnFilters.value;
     },
+    ...(props.enableExpanding
+      ? {
+          get expanded() {
+            return expanded.value;
+          },
+        }
+      : {}),
   },
   onSortingChange: (updater) => {
     sorting.value =
@@ -46,9 +58,23 @@ const table = useVueTable({
     columnFilters.value =
       typeof updater === "function" ? updater(columnFilters.value) : updater;
   },
+  ...(props.enableExpanding
+    ? {
+        onExpandedChange: (updater: any) => {
+          expanded.value =
+            typeof updater === "function"
+              ? updater(expanded.value)
+              : updater;
+        },
+      }
+    : {}),
+  getSubRows: props.getSubRows,
   getCoreRowModel: getCoreRowModel(),
   getSortedRowModel: getSortedRowModel(),
   getFilteredRowModel: getFilteredRowModel(),
+  getExpandedRowModel: props.enableExpanding
+    ? getExpandedRowModel()
+    : undefined,
 });
 
 const { theme } = useTheme();
