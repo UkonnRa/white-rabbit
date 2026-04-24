@@ -12,7 +12,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  create: [parentId: string];
+  create: [parentId: string, type: string];
   edit: [account: Account];
   archive: [account: Account];
   delete: [account: Account];
@@ -86,7 +86,7 @@ const columns: ColumnDef<AccountRow, unknown>[] = [
         h(AppButton, {
           variant: "ghost", size: "sm",
           "aria-label": `Add child account under ${account.name}`,
-          onClick: () => emit("create", account.id),
+          onClick: () => emit("create", account.id, account.type),
         }, () => h(AppIcon, { icon: "lucide:plus", size: "sm" }))
       );
 
