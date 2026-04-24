@@ -18,3 +18,4 @@ export type {
 export { AccountType } from "./app/models";
 
 export type { JournalClient } from "./app/clients";
+export type { AccountClient } from "./app/clients";
