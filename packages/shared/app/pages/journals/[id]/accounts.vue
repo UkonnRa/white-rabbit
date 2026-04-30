@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import type { Account, AccountFormData } from "../../../models";
-import AppButton from "../../../components/ui/AppButton.vue";
-import AppIcon from "../../../components/ui/AppIcon.vue";
+import type { Account, AccountFormData, AccountType } from "../../../models";
 import AppInput from "../../../components/ui/AppInput.vue";
 import AppDialog from "../../../components/ui/AppDialog.vue";
 import AccountTable from "../../../components/AccountTable.vue";
@@ -13,14 +11,13 @@ import AccountDeleteConfirm from "../../../components/AccountDeleteConfirm.vue";
 definePageMeta({ layout: "journal" });
 
 const { journalId } = useCurrentJournal();
-const { data: accounts, status, refresh: refreshAccounts } = useAccounts(journalId);
+const {
+  data: accounts,
+  status,
+  refresh: refreshAccounts,
+} = useAccounts(journalId);
 
 const showArchived = ref(false);
-
-const { tree } = useAccountTree(
-  filteredAccounts,
-  showArchived,
-);
 
 const client = useAccountClient();
 const mutationError = ref<string | null>(null);
@@ -30,17 +27,20 @@ const searchQuery = ref("");
 const filteredAccounts = computed(() => {
   const list = accounts.value ?? [];
   const q = searchQuery.value.toLowerCase().trim();
+
   if (!q) return list;
-  return list.filter(a =>
-    a.name.toLowerCase().includes(q) ||
-    a.tags.some(t => t.toLowerCase().includes(q))
+  return list.filter(
+    (a) =>
+      a.name.toLowerCase().includes(q) ||
+      a.tags.some((t) => t.toLowerCase().includes(q)),
   );
 });
+
+const { tree } = useAccountTree(filteredAccounts, showArchived);
 
 const showCreateDialog = ref(false);
 const creatingParentId = ref<string | null>(null);
 const creatingParentPath = ref("");
-const creatingParentType = ref("");
 
 function getParentPath(accountId: string): string {
   const find = (rows: typeof tree.value): string | null => {
@@ -54,10 +54,9 @@ function getParentPath(accountId: string): string {
   return find(tree.value) ?? "";
 }
 
-function openCreate(parentId: string, parentType: string) {
+function openCreate(parentId: string, _parentType: AccountType) {
   creatingParentId.value = parentId;
   creatingParentPath.value = getParentPath(parentId);
-  creatingParentType.value = parentType;
   showCreateDialog.value = true;
   mutationError.value = null;
 }
@@ -67,9 +66,8 @@ async function handleCreate(data: AccountFormData) {
   mutationError.value = null;
   try {
     await client.create({
-      journal_id: journalId.value,
-      parent_id: creatingParentId.value,
-      type: creatingParentType.value,
+      journalId: journalId.value,
+      parentId: creatingParentId.value,
       ...data,
     });
     showCreateDialog.value = false;
@@ -114,7 +112,7 @@ function countDescendants(accountId: string, rows: typeof tree.value): number {
   return -1;
 }
 
-function countAll(row: typeof tree.value[0]): number {
+function countAll(row: (typeof tree.value)[0]): number {
   let count = row.subRows.length;
   for (const c of row.subRows) count += countAll(c);
   return count;
@@ -122,7 +120,10 @@ function countAll(row: typeof tree.value[0]): number {
 
 function openArchive(account: Account) {
   archivingAccount.value = account;
-  archiveCascadeCount.value = Math.max(0, countDescendants(account.id, tree.value));
+  archiveCascadeCount.value = Math.max(
+    0,
+    countDescendants(account.id, tree.value),
+  );
   showArchiveDialog.value = true;
   mutationError.value = null;
 }
@@ -146,7 +147,10 @@ const deleteCascadeCount = ref(0);
 
 function openDelete(account: Account) {
   deletingAccount.value = account;
-  deleteCascadeCount.value = Math.max(0, countDescendants(account.id, tree.value));
+  deleteCascadeCount.value = Math.max(
+    0,
+    countDescendants(account.id, tree.value),
+  );
   showDeleteDialog.value = true;
   mutationError.value = null;
 }
@@ -170,14 +174,23 @@ async function confirmDelete() {
     <div class="flex items-center justify-between gap-4">
       <h1 class="text-xl font-bold text-on-background">Accounts</h1>
       <div class="flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none">
-          <input type="checkbox" :checked="showArchived" @change="showArchived = !showArchived" />
+        <label
+          class="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none"
+        >
+          <input
+            type="checkbox"
+            :checked="showArchived"
+            @change="showArchived = !showArchived"
+          />
           Show archived
         </label>
       </div>
     </div>
 
-    <AppInput v-model="searchQuery" placeholder="Search accounts by name or tag…" />
+    <AppInput
+      v-model="searchQuery"
+      placeholder="Search accounts by name or tag…"
+    />
 
     <div
       v-if="mutationError"
@@ -194,7 +207,7 @@ async function confirmDelete() {
     </div>
 
     <AccountTable
-      v-else-if="tree.length"
+      v-else
       :data="tree"
       @create="openCreate"
       @edit="openEdit"
@@ -220,7 +233,7 @@ async function confirmDelete() {
           description: editingAccount.description,
           tags: editingAccount.tags,
         }"
-        :parent-path="getParentPath(editingAccount.parent_id ?? '')"
+        :parent-path="getParentPath(editingAccount.parentId ?? '')"
         @submit="handleUpdate"
         @cancel="showEditDialog = false"
       />

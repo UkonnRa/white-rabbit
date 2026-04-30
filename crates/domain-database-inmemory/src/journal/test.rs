@@ -11,12 +11,17 @@ use domain::journal::service::JournalService;
 use shared::WriteService;
 
 use super::InMemoryJournalRepository;
+use crate::account::InMemoryAccountRepository;
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-fn new_service() -> (JournalService<InMemoryJournalRepository>, InMemorySession) {
+fn new_service() -> (
+    JournalService<InMemoryJournalRepository, InMemoryAccountRepository>,
+    InMemorySession,
+) {
     let service = JournalService {
-        repository: Arc::new(InMemoryJournalRepository),
+        journal_repo: Arc::new(InMemoryJournalRepository),
+        account_repo: Arc::new(InMemoryAccountRepository),
     };
     let sess = InMemorySession::default();
     (service, sess)

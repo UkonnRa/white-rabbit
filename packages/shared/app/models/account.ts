@@ -8,21 +8,20 @@ export enum AccountType {
 
 export interface Account {
   id: string;
-  journal_id: string;
-  parent_id: string | null;
+  journalId: string;
+  parentId: string | null;
   type: AccountType;
   name: string;
   description: string;
   tags: string[];
-  created_at: string | null;
-  last_modified_at: string | null;
-  archived_at: string | null;
+  createdAt: string | null;
+  lastModifiedAt: string | null;
+  archivedAt: string | null;
 }
 
 export interface CreateAccountRequest {
-  journal_id: string;
-  parent_id: string | null;
-  type: AccountType;
+  journalId: string;
+  parentId: string;
   name: string;
   description?: string;
   tags?: string[];
@@ -36,8 +35,8 @@ export interface UpdateAccountRequest {
 
 export interface AccountFilter {
   id?: string;
-  journal_id?: string;
-  parent_id?: string;
+  journalId?: string;
+  parentId?: string;
   name?: string;
   type?: AccountType | string;
   tag?: string;

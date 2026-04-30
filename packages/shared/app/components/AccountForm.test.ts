@@ -50,7 +50,11 @@ describe("AccountForm", () => {
     await form.trigger("submit.prevent");
 
     expect(wrapper.emitted("submit")).toBeTruthy();
-    const submitData = wrapper.emitted("submit")![0][0] as any;
+    const submitData = wrapper.emitted("submit")![0]![0] as {
+      name: string;
+      description: string;
+      tags: string[];
+    };
     expect(submitData.name).toBe("Checking");
     expect(submitData.description).toBe("");
     expect(submitData.tags).toEqual([]);

@@ -22,11 +22,30 @@ const props = defineProps<{
   columns: ColumnDef<TData, unknown>[];
   getSubRows?: (row: TData) => TData[];
   enableExpanding?: boolean;
+  expanded?: ExpandedState;
+}>();
+
+const emit = defineEmits<{
+  (e: "update:expanded", value: ExpandedState): void;
 }>();
 
 const sorting = ref<SortingState>([]);
 const columnFilters = ref<ColumnFiltersState>([]);
-const expanded = ref<ExpandedState>({});
+const internalExpanded = ref<ExpandedState>({});
+
+const expandedState = computed(() =>
+  props.expanded !== undefined ? props.expanded : internalExpanded.value,
+);
+
+function handleExpandedChange(updater: unknown) {
+  const next =
+    typeof updater === "function" ? updater(expandedState.value) : updater;
+  if (props.expanded !== undefined) {
+    emit("update:expanded", next);
+  } else {
+    internalExpanded.value = next;
+  }
+}
 
 const table = useVueTable({
   get data() {
@@ -45,7 +64,7 @@ const table = useVueTable({
     ...(props.enableExpanding
       ? {
           get expanded() {
-            return expanded.value;
+            return expandedState.value;
           },
         }
       : {}),
@@ -60,11 +79,8 @@ const table = useVueTable({
   },
   ...(props.enableExpanding
     ? {
-        onExpandedChange: (updater: any) => {
-          expanded.value =
-            typeof updater === "function"
-              ? updater(expanded.value)
-              : updater;
+        onExpandedChange: (updater: unknown) => {
+          handleExpandedChange(updater);
         },
       }
     : {}),

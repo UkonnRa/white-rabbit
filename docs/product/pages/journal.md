@@ -16,7 +16,8 @@ The dashboard surfaces the three domain entities that define a journal:
 
 - **Account tree** — the structural backbone (`docs/product/features.md` §2).
 - **Record register** — all financial events (`docs/product/features.md` §3).
-- **Reports** — derived views that answer questions (`docs/product/features.md` §5).
+- **Reports** — derived views answering questions
+  (`docs/product/features.md` §5).
 
 Sub-pages (`/journals/:id/accounts`, `/journals/:id/records`,
 `/journals/:id/reports/...`) are drill-downs for focused work, not
@@ -24,18 +25,18 @@ replacements for the dashboard view.
 
 ## 2. Use Cases
 
-| #     | Actor | Action                                        | Outcome                                                                 |
-| ----- | ----- | --------------------------------------------- | ----------------------------------------------------------------------- |
-| UC-1  | User  | Opens `/journals/:id`                         | Sees the full account tree, recent records, and summary report widgets  |
-| UC-2  | User  | Clicks an account in the tree                  | Record table filters to that account; tree highlights the selection    |
-| UC-3  | User  | Clicks "Add record"                            | Inline record-entry form opens (or dialog); posts to selected accounts  |
-| UC-4  | User  | Edits a record                                 | Record row expands or dialog opens; inline edit for fields             |
-| UC-5  | User  | Deletes a record                               | Confirmation → record removed; tree balances and reports refresh        |
-| UC-6  | User  | Filters records by date range / tags / payee   | Table narrows; report widgets reflect filtered data                    |
-| UC-7  | User  | Navigates to Accounts sub-page                 | Link in tree toolbar → `/journals/:id/accounts` for deep tree editing  |
-| UC-8  | User  | Views a report in a widget                     | Balance sheet, income statement, or net worth chart renders in-place   |
-| UC-9  | User  | Expands a report widget to full page           | Navigates to `/journals/:id/reports/{report}` for detail               |
-| UC-10 | User  | Imports records (beancount / CSV)              | Import dialog → batch command → tree and table refresh                 |
+| #     | Actor | Action                                       | Outcome                                                                |
+| ----- | ----- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| UC-1  | User  | Opens `/journals/:id`                        | Sees the full account tree, recent records, and summary report widgets |
+| UC-2  | User  | Clicks an account in the tree                | Record table filters to that account; tree highlights the selection    |
+| UC-3  | User  | Clicks "Add record"                          | Inline record-entry form opens (or dialog); posts to selected accounts |
+| UC-4  | User  | Edits a record                               | Record row expands or dialog opens; inline edit for fields             |
+| UC-5  | User  | Deletes a record                             | Confirmation → record removed; tree balances and reports refresh       |
+| UC-6  | User  | Filters records by date range / tags / payee | Table narrows; report widgets reflect filtered data                    |
+| UC-7  | User  | Navigates to Accounts sub-page               | Link in tree toolbar → `/journals/:id/accounts` for deep tree editing  |
+| UC-8  | User  | Views a report in a widget                   | Balance sheet, income statement, or net worth chart renders in-place   |
+| UC-9  | User  | Expands a report widget to full page         | Navigates to `/journals/:id/reports/{report}` for detail               |
+| UC-10 | User  | Imports records (beancount / CSV)            | Import dialog → batch command → tree and table refresh                 |
 
 ## 3. Information Architecture
 
@@ -103,10 +104,10 @@ for a desktop application with drag-resizable panels.
 
 ### 4.2 Panel Overview
 
-| Panel    | Position | Default width | Purpose                                                     |
-| -------- | -------- | ------------- | ----------------------------------------------------------- |
-| Tree     | Left     | 240px         | Full account tree, read-focused, with balances per account  |
-| Register | Center   | flex-grow     | All records in this journal, paginated, filterable          |
+| Panel    | Position | Default width | Purpose                                                        |
+| -------- | -------- | ------------- | -------------------------------------------------------------- |
+| Tree     | Left     | 240px         | Full account tree, read-focused, with balances per account     |
+| Register | Center   | flex-grow     | All records in this journal, paginated, filterable             |
 | Reports  | Right    | 320px         | Stacked report widgets: balance sheet, income statement, chart |
 
 The Reports panel can be collapsed (toggle button in panel header) to
@@ -127,16 +128,16 @@ name and a collapse chevron:
 The dashboard uses the same `layouts/journal.vue` side menu as all
 journal-scoped pages.
 
-| Item      | Route                   | Status                   |
-| --------- | ----------------------- | ------------------------ |
-| Dashboard | `/journals/:id`         | **This page** (active)   |
-| Accounts  | `/journals/:id/accounts`| Link to deep tree editor |
-| Records   | `/journals/:id/records` | Link to full records page|
-| Reports   | `/journals/:id/reports` | Link to full reports page|
+| Item      | Route                    | Status                    |
+| --------- | ------------------------ | ------------------------- |
+| Dashboard | `/journals/:id`          | **This page** (active)    |
+| Accounts  | `/journals/:id/accounts` | Link to deep tree editor  |
+| Records   | `/journals/:id/records`  | Link to full records page |
+| Reports   | `/journals/:id/reports`  | Link to full reports page |
 
 ### 4.5 App Header and Breadcrumb
 
-```
+```text
 White Rabbit > {Journal name}
 ```
 
@@ -199,25 +200,25 @@ account CRUD workspace — that lives at `/journals/:id/accounts`.
 
 Root accounts and their descendants use type-colored left-border accents:
 
-| Type      | Color family | Intent                              |
-| --------- | ------------ | ----------------------------------- |
-| Asset     | Green        | "What I own"                        |
-| Liability | Red/orange   | "What I owe"                        |
-| Equity    | Neutral/grey | "Net worth anchor"                  |
-| Income    | Green (lighter)| "Money in"                         |
-| Expense   | Red (lighter)  | "Money out"                        |
+| Type      | Color family    | Intent             |
+| --------- | --------------- | ------------------ |
+| Asset     | Green           | "What I own"       |
+| Liability | Red/orange      | "What I owe"       |
+| Equity    | Neutral/grey    | "Net worth anchor" |
+| Income    | Green (lighter) | "Money in"         |
+| Expense   | Red (lighter)   | "Money out"        |
 
 The 5 roots are bolded and visually distinct from children.
 
 ### 5.4 Tree Interactions
 
-| Interaction                | Behavior                                                                 |
-| -------------------------- | ------------------------------------------------------------------------ |
-| Click a non-root account   | Filters the register to records posting to that account. Tree highlights the selection. |
-| Click a root account       | Expands/collapses the root subtree. Does not filter records.             |
+| Interaction                | Behavior                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Click a non-root account   | Filters the register to records posting to that account. Tree highlights the selection.                                          |
+| Click a root account       | Expands/collapses the root subtree. Does not filter records.                                                                     |
 | Click `[+ Add account]`    | Opens create dialog (same `AccountForm` used by accounts.md). Parent defaults to the last-expanded node, or picker if ambiguous. |
-| Click `[Open full tree →]` | Navigates to `/journals/:id/accounts` — the full CRUD workspace.         |
-| Hover a row                | Tooltip shows `description`, `created_at`, and a currency/commodity breakdown of the balance. |
+| Click `[Open full tree →]` | Navigates to `/journals/:id/accounts` — the full CRUD workspace.                                                                 |
+| Hover a row                | Tooltip shows `description`, `created_at`, and a currency/commodity breakdown of the balance.                                    |
 
 ### 5.5 Balance Computation Method (Future)
 
@@ -225,6 +226,7 @@ Account balances are computed from records. This is a **read model**
 derived from the write-consistent record stream.
 
 Two approaches (implementation decision, not in this spec):
+
 1. **Client-side summation**: load all records, sum postings per account
    in the browser. Works for moderate record counts.
 2. **Pre-computed read model**: a `balance` column on Account or a
@@ -272,15 +274,15 @@ filterable table. This is the primary data surface of the dashboard.
 
 ### 6.2 Table Columns
 
-| Column      | Data source                   | Format                                                                 |
-| ----------- | ----------------------------- | ---------------------------------------------------------------------- |
-| Date        | `Record.date`                 | `MM-DD` (year implicit in date-range filter). Tooltip shows full date. |
-| Description | `Record.description`          | Primary text; payee shown below in smaller muted text if present.      |
-| Payee       | `Record.payee`                | Shown as subtext under description when non-empty.                     |
+| Column      | Data source                   | Format                                                                                                                              |
+| ----------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Date        | `Record.date`                 | `MM-DD` (year implicit in date-range filter). Tooltip shows full date.                                                              |
+| Description | `Record.description`          | Primary text; payee shown below in smaller muted text if present.                                                                   |
+| Payee       | `Record.payee`                | Shown as subtext under description when non-empty.                                                                                  |
 | Postings    | `Record.items` (Transactions) | Each posting on its own line: `account_name` + `amount`. Account names are indented with `·`. Validations render with a `⇔` marker. |
-| Amount      | Derived (total of postings)   | Not a separate column; each posting shows its own amount.              |
-| Tags        | `Record.tags`                 | `AppChip` components. Hidden column if no records have tags.           |
-| Actions     | —                             | `[✎]` edit, `[🗑]` delete.                                             |
+| Amount      | Derived (total of postings)   | Not a separate column; each posting shows its own amount.                                                                           |
+| Tags        | `Record.tags`                 | `AppChip` components. Hidden column if no records have tags.                                                                        |
+| Actions     | —                             | `[✎]` edit, `[🗑]` delete.                                                                                                          |
 
 ### 6.3 Row Design
 
@@ -295,7 +297,7 @@ and description, then one line per posting. This is the beancount way:
 
 → In the table:
 
-```
+```text
 03-01  Groceries at ACME Mart          [food]  ✎ 🗑
        Expenses:Food          42.50 USD
        Assets:Bank:Checking  -42.50 USD
@@ -309,13 +311,13 @@ to that account (same as clicking in the tree).
 
 A row of filter controls above the table:
 
-| Filter     | Control          | Behavior                                                              |
-| ---------- | ---------------- | --------------------------------------------------------------------- |
-| Date range | Date picker      | "All time" default; presets: "This month", "Last 3 months", "YTD", custom range. |
-| Account    | Dropdown search  | Type-ahead search over account names. Filters to records whose postings reference that account. Synced with tree selection. |
-| Tags       | Multi-select     | Chip input — records must have at least one selected tag.             |
-| Payee      | Text input       | Substring match on `Record.payee`.                                    |
-| Search     | Text input       | Substring match on `Record.description`.                              |
+| Filter     | Control         | Behavior                                                                                                                    |
+| ---------- | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Date range | Date picker     | "All time" default; presets: "This month", "Last 3 months", "YTD", custom range.                                            |
+| Account    | Dropdown search | Type-ahead search over account names. Filters to records whose postings reference that account. Synced with tree selection. |
+| Tags       | Multi-select    | Chip input — records must have at least one selected tag.                                                                   |
+| Payee      | Text input      | Substring match on `Record.payee`.                                                                                          |
+| Search     | Text input      | Substring match on `Record.description`.                                                                                    |
 
 All filters combine with AND. Active filters show a badge count; clicking
 `[Clear]` resets all. The filter state lives in the URL query string so
@@ -326,7 +328,7 @@ that the page is shareable/bookmarkable.
 Records are paginated server-side (or client-side for small journals). A
 simple paginator at the bottom of the table:
 
-```
+```text
 Page 1 of 3   ← 1 2 3 →
 ```
 
@@ -350,14 +352,15 @@ When no records exist in the journal:
 
 ### 6.7 Record Actions
 
-| Action                | Behavior                                                                |
-| --------------------- | ----------------------------------------------------------------------- |
-| `[+ Add Record]`      | Opens a full `RecordForm` dialog. Accounts are selected from a type-ahead picker. Validates balance on submit. |
-| `[Import]`            | Opens import dialog: file picker + format selector (beancount, CSV). Preview table before confirming batch import. |
-| `[✎]` edit on a row   | Opens the same `RecordForm` pre-filled.                                 |
-| `[🗑]` delete on a row | Confirmation dialog → delete.                                           |
+| Action                 | Behavior                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `[+ Add Record]`       | Opens a full `RecordForm` dialog. Accounts are selected from a type-ahead picker. Validates balance on submit.     |
+| `[Import]`             | Opens import dialog: file picker + format selector (beancount, CSV). Preview table before confirming batch import. |
+| `[✎]` edit on a row    | Opens the same `RecordForm` pre-filled.                                                                            |
+| `[🗑]` delete on a row | Confirmation dialog → delete.                                                                                      |
 
 The record form (`RecordForm.vue`) supports:
+
 - Date, description, payee, tags (top section).
 - Dynamic list of postings (bottom section): account picker, amount
   (`number + unit`), optional price (`@`), optional cost (`{}`).
@@ -428,13 +431,13 @@ full reports page — just a dashboard snapshot.
 Each widget is collapsible (chevron toggle) and shows a `[Expand →]`
 link that navigates to the full-page version of that report.
 
-| # | Widget            | Description                                                          | Priority |
-|---|-------------------|----------------------------------------------------------------------|----------|
-| 1 | Balance Sheet     | Assets − Liabilities = Equity. Snapshot at journal's latest date.    | P0       |
-| 2 | Income Statement  | Income − Expenses = Net Income, over the current filter's date range.| P0       |
-| 3 | Net Worth Chart   | Time-series line/area chart of net worth over time.                  | P1       |
-| 4 | Holdings          | Current commodity/stock positions with cost basis. Collapses when no commodities exist. | P1       |
-| 5 | Latest Records    | Last 5 records as a compact list (click navigates to full register). Quick entry point back to recent activity. | P2       |
+| #   | Widget           | Description                                                                                                     | Priority |
+| --- | ---------------- | --------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | Balance Sheet    | Assets − Liabilities = Equity. Snapshot at journal's latest date.                                               | P0       |
+| 2   | Income Statement | Income − Expenses = Net Income, over the current filter's date range.                                           | P0       |
+| 3   | Net Worth Chart  | Time-series line/area chart of net worth over time.                                                             | P1       |
+| 4   | Holdings         | Current commodity/stock positions with cost basis. Collapses when no commodities exist.                         | P1       |
+| 5   | Latest Records   | Last 5 records as a compact list (click navigates to full register). Quick entry point back to recent activity. | P2       |
 
 ### 7.3 Widget Behavior
 
@@ -454,7 +457,7 @@ Reports are **not implemented in the domain yet**. The report widgets are
 designed here so the dashboard layout accommodates them from the start,
 but the initial dashboard ships with:
 
-```
+```text
 ┌─ Reports ─────────────────────────────────────────┐
 │                                                    │
 │         Reports coming soon.                       │
@@ -499,30 +502,31 @@ balance validation.
 
 ### 8.2 Form Fields
 
-| Field         | Control              | Domain input                       | Validation                                  |
-| ------------- | -------------------- | ---------------------------------- | ------------------------------------------- |
-| Date          | Date picker          | `RecordInput.date`                 | Required, defaults to today                 |
-| Description   | `AppInput`           | `RecordInput.description`          | Required (NonEmpty in domain)               |
-| Payee         | `AppInput`           | `RecordInput.payee`                | Optional                                    |
-| Tags          | `AppTagInput`        | `RecordInput.tags`                 | Optional                                    |
-| Postings (N)  | Dynamic list         | `RecordInput.items`                | At least 2; balanced sum; all same kind     |
-| · Account     | Autocomplete/search  | `RecordItemInput.account_id`       | Must belong to this journal; not archived   |
-| · Amount      | `AppInput`           | `RecordItemInput.amount`           | Format: `number unit` (e.g., `42.50 USD`)   |
-| · Price (@)   | `AppInput` (collapsed)| `RecordItemInput.price`           | Same format as amount; optional             |
-| · Cost ({})   | Multi-input (collapsed)|`RecordItemInput.cost`            | Price/date/reference; optional              |
+| Field        | Control                 | Domain input                 | Validation                                |
+| ------------ | ----------------------- | ---------------------------- | ----------------------------------------- |
+| Date         | Date picker             | `RecordInput.date`           | Required, defaults to today               |
+| Description  | `AppInput`              | `RecordInput.description`    | Required (NonEmpty in domain)             |
+| Payee        | `AppInput`              | `RecordInput.payee`          | Optional                                  |
+| Tags         | `AppTagInput`           | `RecordInput.tags`           | Optional                                  |
+| Postings (N) | Dynamic list            | `RecordInput.items`          | At least 2; balanced sum; all same kind   |
+| · Account    | Autocomplete/search     | `RecordItemInput.account_id` | Must belong to this journal; not archived |
+| · Amount     | `AppInput`              | `RecordItemInput.amount`     | Format: `number unit` (e.g., `42.50 USD`) |
+| · Price (@)  | `AppInput` (collapsed)  | `RecordItemInput.price`      | Same format as amount; optional           |
+| · Cost ({})  | Multi-input (collapsed) | `RecordItemInput.cost`       | Price/date/reference; optional            |
 
 ### 8.3 Posting Lines
 
 Each posting line is a horizontal row with:
+
 - **Account picker**: type-ahead search over the full account tree. Shows
   `Asset:Bank:Checking` path. Filters as user types.
 - **Amount**: `number unit` format. Green when positive, red when
   negative. Validation: must match `number unit` pattern.
-- **[@ …]**: collapsed by default. Expands to a `number unit` input for
+- **\[@ …]**: collapsed by default. Expands to a `number unit` input for
   the price annotation.
-- **[{} …]**: collapsed by default. Expands to a cost input
+- **\[{} …]**: collapsed by default. Expands to a cost input
   (price/date/reference). Multiple costs can be added.
-- **[🗑]**: removes this posting line. Disabled when only 2 postings
+- **\[🗑]**: removes this posting line. Disabled when only 2 postings
   remain (need at least 2 for balance).
 - `[+ Add posting]` appends a new empty posting line.
 
@@ -575,36 +579,36 @@ needed.**
 
 Live in `app/components/` — specific to the Journal Dashboard.
 
-| Component                 | Responsibility                                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------ |
-| `JournalDashboard.vue`    | Page-level orchestrator: three-panel layout, panel collapse state, filter state, selection sync. |
-| `AccountTreePanel.vue`    | Wrapper for the tree panel: toolbar (`+ Add`, `Open full tree →`), tree rendering, balance footer. |
-| `AccountTreeRow.vue`      | Single row in the dashboard tree: chevron, name, balance. Read-only variant of `AccountTreeNode` from accounts.md. |
-| `RecordRegisterPanel.vue` | Wrapper for the register: filter bar, table, paginator, empty state.                             |
-| `RecordTable.vue`         | Table with variable-height rows (using TanStack Table or custom implementation).                 |
-| `RecordTableRow.vue`      | Single record row: date, description, expandable postings.                                       |
-| `RecordForm.vue`          | Create/edit record dialog. Dynamic posting lines, live balance bar.                              |
-| `PostingLine.vue`         | Single posting row inside `RecordForm`: account picker, amount, price, cost, delete.             |
-| `RecordFilterBar.vue`     | Horizontal filter controls: date range, account search, tags, payee, search, clear button.       |
-| `RecordImportDialog.vue`  | Import flow: file picker, format detection, preview table, confirm.                              |
-| `ReportsPanel.vue`        | Wrapper for the reports column: placeholder state, widget stack.                                 |
-| `BalanceSheetWidget.vue`  | Compact balance sheet table. (Future — placeholder until reports land.)                          |
-| `IncomeStatementWidget.vue`| Compact income statement table. (Future.)                                                       |
-| `NetWorthChartWidget.vue` | Net worth time-series chart. (Future.)                                                           |
-| `HoldingsWidget.vue`      | Current commodity positions. (Future.)                                                           |
-| `LatestRecordsWidget.vue` | Last 5 records as a compact list. (Future or P2.)                                               |
+| Component                   | Responsibility                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `JournalDashboard.vue`      | Page-level orchestrator: three-panel layout, panel collapse state, filter state, selection sync.                   |
+| `AccountTreePanel.vue`      | Wrapper for the tree panel: toolbar (`+ Add`, `Open full tree →`), tree rendering, balance footer.                 |
+| `AccountTreeRow.vue`        | Single row in the dashboard tree: chevron, name, balance. Read-only variant of `AccountTreeNode` from accounts.md. |
+| `RecordRegisterPanel.vue`   | Wrapper for the register: filter bar, table, paginator, empty state.                                               |
+| `RecordTable.vue`           | Table with variable-height rows (using TanStack Table or custom implementation).                                   |
+| `RecordTableRow.vue`        | Single record row: date, description, expandable postings.                                                         |
+| `RecordForm.vue`            | Create/edit record dialog. Dynamic posting lines, live balance bar.                                                |
+| `PostingLine.vue`           | Single posting row inside `RecordForm`: account picker, amount, price, cost, delete.                               |
+| `RecordFilterBar.vue`       | Horizontal filter controls: date range, account search, tags, payee, search, clear button.                         |
+| `RecordImportDialog.vue`    | Import flow: file picker, format detection, preview table, confirm.                                                |
+| `ReportsPanel.vue`          | Wrapper for the reports column: placeholder state, widget stack.                                                   |
+| `BalanceSheetWidget.vue`    | Compact balance sheet table. (Future — placeholder until reports land.)                                            |
+| `IncomeStatementWidget.vue` | Compact income statement table. (Future.)                                                                          |
+| `NetWorthChartWidget.vue`   | Net worth time-series chart. (Future.)                                                                             |
+| `HoldingsWidget.vue`        | Current commodity positions. (Future.)                                                                             |
+| `LatestRecordsWidget.vue`   | Last 5 records as a compact list. (Future or P2.)                                                                  |
 
 ### 10.3 Layout and Composables
 
-| Item                                    | Responsibility                                                                            |
-| --------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `layouts/journal.vue`                   | Already planned in accounts.md. Wraps default layout with side menu and journal context.   |
-| `composables/useCurrentJournal.ts`      | Already planned in accounts.md. Exposes the current journal.                               |
-| `composables/useRecords.ts`             | `useRecords(journalId, filters)` — paginated record query. Built on `useAsyncData`.         |
-| `composables/useRecordClient.ts`        | Injects `$recordClient`.                                                                    |
-| `composables/useDashboardFilters.ts`    | Reactive filter state (date range, account, tags, payee, search). Syncs to URL query string.|
-| `clients/record-client.ts`              | `RecordClient` interface — `create / get / list / update / delete / batch`.                 |
-| `models/record.ts`                      | `Record`, `CreateRecordRequest`, `UpdateRecordRequest`, `RecordFilter`.                     |
+| Item                                 | Responsibility                                                                               |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `layouts/journal.vue`                | Already planned in accounts.md. Wraps default layout with side menu and journal context.     |
+| `composables/useCurrentJournal.ts`   | Already planned in accounts.md. Exposes the current journal.                                 |
+| `composables/useRecords.ts`          | `useRecords(journalId, filters)` — paginated record query. Built on `useAsyncData`.          |
+| `composables/useRecordClient.ts`     | Injects `$recordClient`.                                                                     |
+| `composables/useDashboardFilters.ts` | Reactive filter state (date range, account, tags, payee, search). Syncs to URL query string. |
+| `clients/record-client.ts`           | `RecordClient` interface — `create / get / list / update / delete / batch`.                  |
+| `models/record.ts`                   | `Record`, `CreateRecordRequest`, `UpdateRecordRequest`, `RecordFilter`.                      |
 
 ## 11. Page Route and Data Flow
 
@@ -613,7 +617,7 @@ Route:      /journals/:id
 Layout:     journal
 Data:       useCurrentJournal()              → Journal (loaded by layout)
             useAccounts(journalId)            → AccountClient.list({ journalId })
-            useRecords(journalId, filters)    → RecordClient.list({ journalId, filters })
+            useRecords(journalId, filters)    → RecordClient.list(params)
 Mutations:  RecordClient.create / update / delete / batch → refresh()
             AccountClient.create (from dashboard [+ Add account]) → refreshAccounts()
 ```
@@ -636,7 +640,7 @@ Mutations:  RecordClient.create / update / delete / batch → refresh()
 
 The filter bar writes its state to the URL query string:
 
-```
+```text
 /journals/:id?from=2024-01-01&to=2024-12-31&account=abc123&tags=food,home&payee=ACME&search=groceries&page=2
 ```
 
@@ -648,11 +652,11 @@ and writes updates back via `router.replace`.
 
 On narrow viewports, the three-panel layout adapts:
 
-| Breakpoint          | Layout                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------ |
+| Breakpoint          | Layout                                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | < 768px (mobile)    | Single column: register fills the screen. Tree and reports become tabs or slide-over drawers accessed via bottom nav buttons. |
-| 768–1280px (tablet) | Two panels: tree (collapsible sidebar, not a persistent panel) + register. Reports collapse to a toggleable drawer. |
-| > 1280px (desktop)  | Full three-panel layout as designed. Panels are drag-resizable.                            |
+| 768–1280px (tablet) | Two panels: tree (collapsible sidebar, not a persistent panel) + register. Reports collapse to a toggleable drawer.           |
+| > 1280px (desktop)  | Full three-panel layout as designed. Panels are drag-resizable.                                                               |
 
 On mobile, the filter bar collapses into a single search input with a
 `[Filters ▾]` button that opens a bottom sheet with all filter controls.
@@ -663,6 +667,7 @@ On mobile, the filter bar collapses into a single search input with a
 
 The Accounts page is the **deep-editing workspace** for the account tree.
 It exists because:
+
 - Creating, editing, archiving, and deleting accounts (especially in bulk)
   deserves full-screen focus and a richer tree interaction model.
 - The dashboard tree is read-optimized; it doesn't need inline edit icons

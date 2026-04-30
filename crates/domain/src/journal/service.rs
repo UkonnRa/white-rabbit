@@ -1,5 +1,8 @@
 use chrono::Utc;
 
+use crate::account::event::{AccountCreated, AccountEvent};
+use crate::account::repository::AccountRepository;
+use crate::account::{Account, AccountInput, AccountType};
 use crate::error::Result;
 use crate::journal::command::{
     JournalCommand, JournalCommandBatch, JournalCommandCreate, JournalCommandUpdate,
@@ -12,11 +15,12 @@ use shared::{Entity, ErrorKind, HandleResult, RepositorySession, UnitOfWork, Wri
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-pub struct JournalService<R: JournalRepository> {
-    pub repository: Arc<R>,
+pub struct JournalService<JR: JournalRepository, AR: AccountRepository<Session = JR::Session>> {
+    pub journal_repo: Arc<JR>,
+    pub account_repo: Arc<AR>,
 }
 
-impl<R: JournalRepository> JournalService<R> {
+impl<JR: JournalRepository, AR: AccountRepository<Session = JR::Session>> JournalService<JR, AR> {
     /// Create new [`Journal`]s in a batch.
     ///
     /// # Prerequisites
@@ -32,7 +36,7 @@ impl<R: JournalRepository> JournalService<R> {
     ///   — a name is empty or blank.
     async fn do_create(
         &self,
-        sess: &R::Session,
+        sess: &JR::Session,
         uow: &mut UnitOfWork,
         commands: Vec<JournalCommandCreate>,
     ) -> Result<()> {
@@ -54,7 +58,7 @@ impl<R: JournalRepository> JournalService<R> {
 
         let spec = JournalSpecification::names(seen_names.iter().copied());
         if let Some(existing) = uow
-            .find_one(self.repository.as_ref(), sess, &spec)
+            .find_one(self.journal_repo.as_ref(), sess, &spec)
             .await
             .map_err(|e| e.convert())?
         {
@@ -78,7 +82,39 @@ impl<R: JournalRepository> JournalService<R> {
             })
             .collect::<Result<Vec<Journal>>>()?;
 
+        let root_types = [
+            (AccountType::Asset, "Asset"),
+            (AccountType::Liability, "Liability"),
+            (AccountType::Equity, "Equity"),
+            (AccountType::Income, "Income"),
+            (AccountType::Expense, "Expense"),
+        ];
+
         for journal in journals {
+            for (account_type, name) in &root_types {
+                let account: Account = AccountInput {
+                    journal_id: journal.id.clone(),
+                    parent_id: None,
+                    r#type: *account_type,
+                    name: name.to_string(),
+                    created_at: Some(now),
+                    ..Default::default()
+                }
+                .try_into()?;
+
+                uow.add_event(AccountEvent::Created(AccountCreated {
+                    id: account.id.clone(),
+                    journal_id: account.journal_id.clone(),
+                    parent_id: None,
+                    r#type: account.r#type,
+                    name: name.to_string(),
+                    description: String::new(),
+                    tags: HashSet::new(),
+                    created_at: now,
+                }));
+                uow.register_new::<Account>(account);
+            }
+
             uow.add_event(JournalEvent::Created(JournalCreated {
                 id: journal.id.clone(),
                 name: journal.name.to_string(),
@@ -119,7 +155,7 @@ impl<R: JournalRepository> JournalService<R> {
     ///   — a name is empty or blank.
     async fn do_update(
         &self,
-        sess: &R::Session,
+        sess: &JR::Session,
         uow: &mut UnitOfWork,
         commands: Vec<JournalCommandUpdate>,
     ) -> Result<()> {
@@ -139,7 +175,7 @@ impl<R: JournalRepository> JournalService<R> {
 
         let id_vec: Vec<_> = commands.iter().map(|cmd| cmd.id.clone()).collect();
         let existing = uow
-            .find_all_by_ids(self.repository.as_ref(), sess, &id_vec)
+            .find_all_by_ids(self.journal_repo.as_ref(), sess, &id_vec)
             .await
             .map_err(|e| e.convert())?;
 
@@ -165,7 +201,7 @@ impl<R: JournalRepository> JournalService<R> {
 
         let spec = JournalSpecification::names(new_names.iter().copied());
         let conflicts = uow
-            .find_all(self.repository.as_ref(), sess, &spec, None)
+            .find_all(self.journal_repo.as_ref(), sess, &spec, None)
             .await
             .map_err(|e| e.convert())?;
 
@@ -248,7 +284,7 @@ impl<R: JournalRepository> JournalService<R> {
     /// - Newly created journals are visible to the update name-conflict check.
     async fn do_batch(
         &self,
-        sess: &R::Session,
+        sess: &JR::Session,
         uow: &mut UnitOfWork,
         command: JournalCommandBatch,
     ) -> Result<()> {
@@ -260,10 +296,12 @@ impl<R: JournalRepository> JournalService<R> {
 }
 
 #[async_trait::async_trait]
-impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
+impl<JR: JournalRepository, AR: AccountRepository<Session = JR::Session>>
+    WriteService<JournalCommand> for JournalService<JR, AR>
+{
     type Entity = Journal;
     type Event = JournalEvent;
-    type Session = R::Session;
+    type Session = JR::Session;
     type Error = crate::error::Error;
 
     async fn do_handle(
@@ -300,7 +338,7 @@ impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
         if let Some(cs) = uow.take_change_set::<Journal>() {
             if !cs.deleted.is_empty() {
                 let ids: Vec<_> = cs.deleted.into_iter().collect();
-                if let Err(e) = self.repository.delete_all_by_ids(sess, &ids).await {
+                if let Err(e) = self.journal_repo.delete_all_by_ids(sess, &ids).await {
                     let _ = sess.rollback().await;
                     return Err(e.convert());
                 }
@@ -308,13 +346,23 @@ impl<R: JournalRepository> WriteService<JournalCommand> for JournalService<R> {
 
             let to_save: Vec<_> = cs.new.into_values().chain(cs.dirty.into_values()).collect();
             if !to_save.is_empty() {
-                match self.repository.save_all(sess, &to_save).await {
+                match self.journal_repo.save_all(sess, &to_save).await {
                     Ok(saved) => saved_entities = saved.into_values().collect(),
                     Err(e) => {
                         let _ = sess.rollback().await;
                         return Err(e.convert());
                     }
                 }
+            }
+        }
+
+        if let Some(cs) = uow.take_change_set::<Account>() {
+            let to_save: Vec<_> = cs.new.into_values().chain(cs.dirty.into_values()).collect();
+            if !to_save.is_empty()
+                && let Err(e) = self.account_repo.save_all(sess, &to_save).await
+            {
+                let _ = sess.rollback().await;
+                return Err(e.convert());
             }
         }
 

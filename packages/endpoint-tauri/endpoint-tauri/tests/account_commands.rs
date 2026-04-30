@@ -1,6 +1,5 @@
 use database_seaorm_migration::MigratorTrait;
 use endpoint_tauri_lib::state::AppState;
-use shared::EntityId;
 use tauri::Manager;
 use tauri::ipc::{CallbackFn, InvokeBody};
 use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
@@ -60,44 +59,25 @@ async fn seed_journal(
     result["id"].as_str().unwrap().to_string()
 }
 
-/// Insert a root account directly via the repo (roots are system-created,
-/// not exposed as a user command).
-async fn seed_root_account(
-    app: &tauri::App<tauri::test::MockRuntime>,
-    journal_id: &str,
-    account_type: domain::account::AccountType,
-) -> String {
-    let state = app.state::<AppState>();
-    let mut sess = state.new_session();
-
-    let id = domain::account::AccountId::default();
-    let account: domain::account::Account = domain::account::AccountInput {
-        id: id.clone(),
-        journal_id: domain::journal::JournalId::from_value(journal_id),
-        r#type: account_type,
-        name: account_type.to_string(),
-        ..Default::default()
-    }
-    .try_into()
-    .unwrap();
-
-    use shared::WriteRepository;
-    state
-        .account_repo
-        .save_all(&mut sess, &[account])
-        .await
-        .unwrap();
-
-    id.value().to_string()
-}
-
-/// Shared setup: create a journal + Asset root account, return (journal_id, root_id).
+/// Shared setup: create a journal (which auto-seeds 5 root accounts),
+/// then find the Asset root. Returns (journal_id, root_id).
 async fn setup(
-    app: &tauri::App<tauri::test::MockRuntime>,
+    _app: &tauri::App<tauri::test::MockRuntime>,
     webview: tauri::WebviewWindow<tauri::test::MockRuntime>,
 ) -> (String, String) {
-    let journal_id = seed_journal(webview, "Test Journal").await;
-    let root_id = seed_root_account(app, &journal_id, domain::account::AccountType::Asset).await;
+    let journal_id = seed_journal(webview.clone(), "Test Journal").await;
+
+    let result = invoke(
+        webview,
+        "list_accounts",
+        serde_json::json!({ "filter": { "journalId": &journal_id, "type": "Asset" } }),
+    )
+    .await
+    .unwrap();
+
+    let arr = result.as_array().unwrap();
+    let root_id = arr[0]["id"].as_str().unwrap().to_string();
+
     (journal_id, root_id)
 }
 
@@ -349,9 +329,9 @@ async fn list_accounts_by_journal() {
     .await
     .unwrap();
 
-    // root + 2 children
+    // 5 roots + 2 children
     let arr = result.as_array().unwrap();
-    assert_eq!(arr.len(), 3);
+    assert_eq!(arr.len(), 7);
 }
 
 #[tokio::test]

@@ -1,128 +1,65 @@
 <script setup lang="ts">
-import { h } from "vue";
-import type { AccountRow, Account } from "../models";
+import { h, ref } from "vue";
+import type { ExpandedState } from "@tanstack/vue-table";
+import type { AccountRow, Account, AccountType } from "../models";
 import AppDataTable from "./ui/AppDataTable.vue";
-import AppButton from "./ui/AppButton.vue";
-import AppIcon from "./ui/AppIcon.vue";
-import AppChip from "./ui/AppChip.vue";
+import AccountNameCell from "./account-table/AccountNameCell.vue";
+import AccountTagsCell from "./account-table/AccountTagsCell.vue";
+import AccountActionsCell from "./account-table/AccountActionsCell.vue";
 import type { ColumnDef } from "@tanstack/vue-table";
 
-const props = defineProps<{
+defineProps<{
   data: AccountRow[];
 }>();
 
 const emit = defineEmits<{
-  create: [parentId: string, type: string];
+  create: [parentId: string, type: AccountType];
   edit: [account: Account];
   archive: [account: Account];
   delete: [account: Account];
 }>();
 
-const TYPE_ICONS: Record<string, string> = {
-  Asset: "lucide:landmark",
-  Liability: "lucide:credit-card",
-  Equity: "lucide:scale",
-  Income: "lucide:trending-up",
-  Expense: "lucide:trending-down",
-};
+const expanded = ref<ExpandedState>({});
 
 const columns: ColumnDef<AccountRow, unknown>[] = [
   {
     id: "name",
     header: "Name",
-    cell: ({ row }) => {
-      const account = row.original;
-      return h("div", { class: "flex items-center gap-2" }, [
-        row.getCanExpand()
-          ? h(AppButton, {
-              variant: "ghost",
-              size: "sm",
-              "aria-label": account.name,
-              onClick: row.getToggleExpandedHandler(),
-            }, () => h(AppIcon, {
-              icon: row.getIsExpanded() ? "lucide:chevron-down" : "lucide:chevron-right",
-              size: "sm",
-            }))
-          : h("span", { class: "w-6 inline-block" }),
-
-        h(AppIcon, {
-          icon: TYPE_ICONS[account.type] ?? "lucide:folder",
-          size: "sm",
-        }),
-
-        h("span", {
-          class: account.parent_id === null ? "font-semibold text-on-surface" : "text-on-surface",
-          style: { paddingLeft: `${account.depth * 12}px` },
-        }, account.name),
-
-        account.archived_at
-          ? h("span", { class: "text-xs px-1.5 py-0.5 rounded bg-surface-variant text-on-surface-variant ml-2" }, "Archived")
-          : null,
-      ]);
-    },
+    cell: ({ row }) =>
+      h(AccountNameCell, {
+        account: row.original,
+        row,
+        expanded: expanded.value,
+        onToggleExpand: (rowId: string) => {
+          const next: Record<string, boolean> = {
+            ...(expanded.value as Record<string, boolean>),
+          };
+          if (next[rowId]) {
+            delete next[rowId];
+          } else {
+            next[rowId] = true;
+          }
+          expanded.value = next;
+        },
+      }),
   },
   {
     id: "tags",
     header: "Tags",
-    cell: ({ row }) => {
-      const tags = row.original.tags;
-      if (!tags.length) return null;
-      return h("div", { class: "flex flex-wrap gap-1" },
-        tags.map(tag => h(AppChip, { variant: "tonal", size: "sm" }, () => tag))
-      );
-    },
+    cell: ({ row }) => h(AccountTagsCell, { account: row.original }),
   },
   {
     id: "actions",
-    header: "",
-    cell: ({ row }) => {
-      const account = row.original;
-      const isRoot = account.parent_id === null;
-      const isArchived = !!account.archived_at;
-
-      const buttons: ReturnType<typeof h>[] = [];
-
-      buttons.push(
-        h(AppButton, {
-          variant: "ghost", size: "sm",
-          "aria-label": `Add child account under ${account.name}`,
-          onClick: () => emit("create", account.id, account.type),
-        }, () => h(AppIcon, { icon: "lucide:plus", size: "sm" }))
-      );
-
-      if (!isRoot) {
-        buttons.push(
-          h(AppButton, {
-            variant: "ghost", size: "sm",
-            "aria-label": `Edit ${account.name}`,
-            onClick: () => emit("edit", account as Account),
-          }, () => h(AppIcon, { icon: "lucide:pencil", size: "sm" }))
-        );
-      }
-
-      if (!isRoot && !isArchived) {
-        buttons.push(
-          h(AppButton, {
-            variant: "ghost", size: "sm",
-            "aria-label": `Archive ${account.name}`,
-            onClick: () => emit("archive", account as Account),
-          }, () => h(AppIcon, { icon: "lucide:archive", size: "sm" }))
-        );
-      }
-
-      if (!isRoot) {
-        buttons.push(
-          h(AppButton, {
-            variant: "ghost", size: "sm",
-            class: "text-error",
-            "aria-label": `Delete ${account.name}`,
-            onClick: () => emit("delete", account as Account),
-          }, () => h(AppIcon, { icon: "lucide:trash-2", size: "sm" }))
-        );
-      }
-
-      return h("div", { class: "flex items-center gap-1" }, buttons);
-    },
+    header: "Actions",
+    cell: ({ row }) =>
+      h(AccountActionsCell, {
+        account: row.original,
+        onCreate: (parentId: string, type: string) =>
+          emit("create", parentId, type as AccountType),
+        onEdit: (account: Account) => emit("edit", account),
+        onArchive: (account: Account) => emit("archive", account),
+        onDelete: (account: Account) => emit("delete", account),
+      }),
   },
 ];
 
@@ -137,6 +74,8 @@ function getSubRows(row: AccountRow): AccountRow[] {
     :columns="columns"
     :get-sub-rows="getSubRows"
     :enable-expanding="true"
+    :expanded="expanded"
+    @update:expanded="expanded = $event"
   >
     <template #empty>
       <div class="text-center py-8 text-on-surface-variant">

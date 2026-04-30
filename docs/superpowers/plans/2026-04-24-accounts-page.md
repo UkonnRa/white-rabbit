@@ -1,27 +1,41 @@
 # Accounts Page + Journal Dashboard Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task.
+> Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the Accounts page (`/journals/:id/accounts`) as an expandable TanStack Table and a minimal Journal Dashboard (`/journals/:id`).
+**Goal:** Ship the Accounts page (`/journals/:id/accounts`) as an
+expandable TanStack Table and a minimal Journal Dashboard
+(`/journals/:id`).
 
-**Architecture:** 5 layers. Layer 1 exposes `archive_account` in Tauri. Layer 2 builds shared frontend foundation (model, client, composables, `journal.vue` layout). Layer 3 enhances `AppDataTable` with TanStack expanding. Layer 4 builds the Accounts page (table + form + dialogs). Layer 5 builds the minimal dashboard. TDD throughout — tests first, then implementation.
+**Architecture:** 5 layers. Layer 1 exposes `archive_account` in
+Tauri. Layer 2 builds shared frontend foundation (model, client,
+composables, `journal.vue` layout). Layer 3 enhances `AppDataTable`
+with TanStack expanding. Layer 4 builds the Accounts page (table +
+form + dialogs). Layer 5 builds the minimal dashboard. TDD
+throughout — tests first, then implementation.
 
-**Tech Stack:** Nuxt 4 (Vue 3 + TypeScript), TanStack Table (expanding), Tauri (Rust), Vitest, `@vue/test-utils`
+**Tech Stack:** Nuxt 4 (Vue 3 + TypeScript), TanStack Table
+(expanding), Tauri (Rust), Vitest, `@vue/test-utils`
 
 **Spec:** `docs/superpowers/specs/2026-04-24-accounts-page-design.md`
 **Product docs:** `docs/product/pages/accounts.md`, `docs/product/pages/journal.md`
 
 ---
 
-### Task 1: Expose archive_account Tauri command
+## Task 1: Expose archive_account Tauri command
 
 **Files:**
+
 - Modify: `packages/endpoint-tauri/endpoint-tauri/src/account.rs`
 - Modify: `packages/endpoint-tauri/endpoint-tauri/src/lib.rs`
-
 - [ ] **Step 1: Read existing account.rs for pattern**
 
-Read `packages/endpoint-tauri/endpoint-tauri/src/account.rs` — note how `create_account`, `update_account`, `delete_account` are structured. Each takes `state: tauri::State<'_, AppState>` and uses `state.account_service.handle(...)`.
+Read `packages/endpoint-tauri/endpoint-tauri/src/account.rs` — note
+how `create_account`, `update_account`, `delete_account` are
+structured. Each takes `state: tauri::State<'_, AppState>` and uses
+`state.account_service.handle(...)`.
 
 - [ ] **Step 2: Add archive_account command**
 
@@ -59,16 +73,24 @@ pub async fn archive_account(
 
 - [ ] **Step 3: Verify AccountCommand::Archive variant**
 
-Check `crates/domain/src/account/command.rs` to confirm the exact variant name for `AccountCommand::Archive`. It may be a struct variant with fields `id` and `archived_at`. Read the file and adjust the command construction if needed.
+Check `crates/domain/src/account/command.rs` to confirm the exact
+variant name for `AccountCommand::Archive`. It may be a struct
+variant with fields `id` and `archived_at`. Read the file and
+adjust the command construction if needed.
 
-Expected: `AccountCommand::Archive` exists as a variant with `id: AccountId` and `archived_at: DateTime<Utc>` fields, or similar.
+Expected: `AccountCommand::Archive` exists as a variant with
+`id: AccountId` and `archived_at: DateTime<Utc>` fields, or
+similar.
 
 - [ ] **Step 4: Register archive_account in lib.rs**
 
-In `packages/endpoint-tauri/endpoint-tauri/src/lib.rs`, add `account::archive_account` to the `generate_handler!` macro:
+In `packages/endpoint-tauri/endpoint-tauri/src/lib.rs`, add
+`account::archive_account` to the `generate_handler!` macro:
 
 ```rust
-pub fn register_handlers<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+pub fn register_handlers<R: tauri::Runtime>(
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
     builder.invoke_handler(tauri::generate_handler![
         journal::create_journal,
         journal::get_journal,
@@ -105,13 +127,16 @@ git commit -m "feat: expose archive_account Tauri command"
 ### Task 2: Account model
 
 **Files:**
+
 - Create: `packages/shared/app/models/account.ts`
 - Modify: `packages/shared/index.ts`
 - Test: `packages/shared/app/models/account.test.ts`
-
 - [ ] **Step 1: Read existing model pattern**
 
-Read `packages/shared/app/models/journal.ts` — note the pattern: interfaces for `Journal`, `CreateJournalRequest`, `UpdateJournalRequest`, `JournalFilter`, `JournalFormData`. The file exports types only (no runtime code).
+Read `packages/shared/app/models/journal.ts` — note the pattern:
+interfaces for `Journal`, `CreateJournalRequest`,
+`UpdateJournalRequest`, `JournalFilter`, `JournalFormData`. The
+file exports types only (no runtime code).
 
 - [ ] **Step 2: Write the test file**
 
@@ -216,7 +241,9 @@ Read `packages/shared/app/models/index.ts` to see what it exports.
 
 - [ ] **Step 7: Export from models barrel**
 
-Edit `packages/shared/app/models/index.ts` — add `export * from "./account";` (or add account types individually if the file uses explicit exports).
+Edit `packages/shared/app/models/index.ts` — add
+`export * from "./account";` (or add account types individually if
+the file uses explicit exports).
 
 - [ ] **Step 8: Export Account types from shared package**
 
@@ -237,7 +264,10 @@ export { AccountType } from "./app/models";
 - [ ] **Step 9: Commit**
 
 ```bash
-git add packages/shared/app/models/account.ts packages/shared/app/models/account.test.ts packages/shared/app/models/index.ts packages/shared/index.ts
+git add packages/shared/app/models/account.ts \
+  packages/shared/app/models/account.test.ts \
+  packages/shared/app/models/index.ts \
+  packages/shared/index.ts
 git commit -m "feat: add Account model types"
 ```
 
@@ -246,12 +276,14 @@ git commit -m "feat: add Account model types"
 ### Task 3: AccountClient interface
 
 **Files:**
+
 - Create: `packages/shared/app/clients/account-client.ts`
 - Modify: `packages/shared/index.ts`
-
 - [ ] **Step 1: Read existing client pattern**
 
-Read `packages/shared/app/clients/journal-client.ts` — note the `JournalClient` interface with `create/get/list/update/delete`, the `declare module "#app"` block for type augmentation.
+Read `packages/shared/app/clients/journal-client.ts` — note the
+`JournalClient` interface with `create/get/list/update/delete`, the
+`declare module "#app"` block for type augmentation.
 
 - [ ] **Step 2: Write the client interface**
 
@@ -291,12 +323,16 @@ export type { AccountClient } from "./app/clients";
 
 - [ ] **Step 4: Check clients barrel**
 
-Read `packages/shared/app/clients/index.ts`. Add `export type { AccountClient } from "./account-client";` if using explicit exports.
+Read `packages/shared/app/clients/index.ts`. Add
+`export type { AccountClient } from "./account-client";` if using
+explicit exports.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/shared/app/clients/account-client.ts packages/shared/app/clients/index.ts packages/shared/index.ts
+git add packages/shared/app/clients/account-client.ts \
+  packages/shared/app/clients/index.ts \
+  packages/shared/index.ts
 git commit -m "feat: add AccountClient interface"
 ```
 
@@ -305,12 +341,13 @@ git commit -m "feat: add AccountClient interface"
 ### Task 4: TauriAccountClient implementation + plugin
 
 **Files:**
+
 - Create: `packages/endpoint-tauri/app/clients/account-client.ts`
 - Create: `packages/endpoint-tauri/app/plugins/account-client.ts`
-
 - [ ] **Step 1: Read existing Tauri client pattern**
 
-Read `packages/endpoint-tauri/app/clients/journal-client.ts` — note the `invoke(...)` calls mapping to Tauri commands.
+Read `packages/endpoint-tauri/app/clients/journal-client.ts` — note
+the `invoke(...)` calls mapping to Tauri commands.
 
 - [ ] **Step 2: Write TauriAccountClient**
 
@@ -355,7 +392,8 @@ export class TauriAccountClient implements AccountClient {
 
 - [ ] **Step 3: Read existing plugin pattern**
 
-Read `packages/endpoint-tauri/app/plugins/journal-client.ts` — note the `defineNuxtPlugin` pattern.
+Read `packages/endpoint-tauri/app/plugins/journal-client.ts` —
+note the `defineNuxtPlugin` pattern.
 
 - [ ] **Step 4: Write account client plugin**
 
@@ -381,11 +419,13 @@ git commit -m "feat: add TauriAccountClient + plugin"
 ### Task 5: useAccountClient composable
 
 **Files:**
+
 - Create: `packages/shared/app/composables/useAccountClient.ts`
 
 - [ ] **Step 1: Read existing composable pattern**
 
-Read `packages/shared/app/composables/useJournalClient.ts` — note the simple `useNuxtApp().$journalClient` pattern.
+Read `packages/shared/app/composables/useJournalClient.ts` — note
+the simple `useNuxtApp().$journalClient` pattern.
 
 - [ ] **Step 2: Write useAccountClient**
 
@@ -411,12 +451,13 @@ git commit -m "feat: add useAccountClient composable"
 ### Task 6: Account composables (useAccounts, useAccount, useAccountTree)
 
 **Files:**
+
 - Create: `packages/shared/app/composables/account.ts`
 - Test: `packages/shared/app/composables/account.test.ts`
-
 - [ ] **Step 1: Read existing composable pattern**
 
-Read `packages/shared/app/composables/journal.ts` — note the `useAsyncData` pattern with `watch`.
+Read `packages/shared/app/composables/journal.ts` — note the
+`useAsyncData` pattern with `watch`.
 
 - [ ] **Step 2: Write the test for useAccountTree**
 
@@ -446,15 +487,40 @@ function makeAcc(overrides: Partial<Account> & { id: string }): Account {
 describe("buildAccountRows", () => {
   it("returns 5 root rows from the 5 root accounts", () => {
     const accounts: Account[] = [
-      makeAcc({ id: "a1", type: AccountType.Asset, parent_id: null, name: "Asset" }),
-      makeAcc({ id: "l1", type: AccountType.Liability, parent_id: null, name: "Liability" }),
-      makeAcc({ id: "e1", type: AccountType.Equity, parent_id: null, name: "Equity" }),
-      makeAcc({ id: "i1", type: AccountType.Income, parent_id: null, name: "Income" }),
-      makeAcc({ id: "x1", type: AccountType.Expense, parent_id: null, name: "Expense" }),
+      makeAcc({
+        id: "a1",
+        type: AccountType.Asset,
+        parent_id: null,
+        name: "Asset",
+      }),
+      makeAcc({
+        id: "l1",
+        type: AccountType.Liability,
+        parent_id: null,
+        name: "Liability",
+      }),
+      makeAcc({
+        id: "e1",
+        type: AccountType.Equity,
+        parent_id: null,
+        name: "Equity",
+      }),
+      makeAcc({
+        id: "i1",
+        type: AccountType.Income,
+        parent_id: null,
+        name: "Income",
+      }),
+      makeAcc({
+        id: "x1",
+        type: AccountType.Expense,
+        parent_id: null,
+        name: "Expense",
+      }),
     ];
     const rows = buildAccountRows(accounts);
     expect(rows).toHaveLength(5);
-    expect(rows.map(r => r.type)).toEqual([
+    expect(rows.map((r) => r.type)).toEqual([
       AccountType.Asset,
       AccountType.Liability,
       AccountType.Equity,
@@ -465,9 +531,24 @@ describe("buildAccountRows", () => {
 
   it("nests children under parents via subRows", () => {
     const accounts: Account[] = [
-      makeAcc({ id: "root", type: AccountType.Asset, parent_id: null, name: "Asset" }),
-      makeAcc({ id: "child1", type: AccountType.Asset, parent_id: "root", name: "Bank" }),
-      makeAcc({ id: "child2", type: AccountType.Asset, parent_id: "root", name: "Cash" }),
+      makeAcc({
+        id: "root",
+        type: AccountType.Asset,
+        parent_id: null,
+        name: "Asset",
+      }),
+      makeAcc({
+        id: "child1",
+        type: AccountType.Asset,
+        parent_id: "root",
+        name: "Bank",
+      }),
+      makeAcc({
+        id: "child2",
+        type: AccountType.Asset,
+        parent_id: "root",
+        name: "Cash",
+      }),
     ];
     const rows = buildAccountRows(accounts);
     expect(rows).toHaveLength(1);
@@ -478,9 +559,24 @@ describe("buildAccountRows", () => {
 
   it("computes depth correctly", () => {
     const accounts: Account[] = [
-      makeAcc({ id: "root", type: AccountType.Asset, parent_id: null, name: "Asset" }),
-      makeAcc({ id: "c1", type: AccountType.Asset, parent_id: "root", name: "Bank" }),
-      makeAcc({ id: "c2", type: AccountType.Asset, parent_id: "c1", name: "Checking" }),
+      makeAcc({
+        id: "root",
+        type: AccountType.Asset,
+        parent_id: null,
+        name: "Asset",
+      }),
+      makeAcc({
+        id: "c1",
+        type: AccountType.Asset,
+        parent_id: "root",
+        name: "Bank",
+      }),
+      makeAcc({
+        id: "c2",
+        type: AccountType.Asset,
+        parent_id: "c1",
+        name: "Checking",
+      }),
     ];
     const rows = buildAccountRows(accounts);
     expect(rows[0].depth).toBe(0);
@@ -495,13 +591,28 @@ describe("buildAccountRows", () => {
 
   it("groups accounts by type", () => {
     const accounts: Account[] = [
-      makeAcc({ id: "a1", type: AccountType.Asset, parent_id: null, name: "Asset" }),
-      makeAcc({ id: "e1", type: AccountType.Expense, parent_id: null, name: "Expense" }),
-      makeAcc({ id: "ea1", type: AccountType.Asset, parent_id: "a1", name: "Cash" }),
+      makeAcc({
+        id: "a1",
+        type: AccountType.Asset,
+        parent_id: null,
+        name: "Asset",
+      }),
+      makeAcc({
+        id: "e1",
+        type: AccountType.Expense,
+        parent_id: null,
+        name: "Expense",
+      }),
+      makeAcc({
+        id: "ea1",
+        type: AccountType.Asset,
+        parent_id: "a1",
+        name: "Cash",
+      }),
     ];
     const rows = buildAccountRows(accounts);
     expect(rows).toHaveLength(2);
-    const assetRow = rows.find(r => r.type === AccountType.Asset)!;
+    const assetRow = rows.find((r) => r.type === AccountType.Asset)!;
     expect(assetRow.subRows).toHaveLength(1);
   });
 });
@@ -525,18 +636,18 @@ import { AccountType } from "../models";
 
 export function useAccounts(journalId: MaybeRef<string>) {
   const client = useAccountClient();
-  return useAsyncData(`accounts:${toValue(journalId)}`, () =>
-    client.list({ journal_id: toValue(journalId) }),
-    { watch: isRef(journalId) ? [journalId] : undefined }
+  return useAsyncData(
+    `accounts:${toValue(journalId)}`,
+    () => client.list({ journal_id: toValue(journalId) }),
+    { watch: isRef(journalId) ? [journalId] : undefined },
   );
 }
 
 export function useAccount(id: MaybeRef<string>) {
   const client = useAccountClient();
-  return useAsyncData(`account:${toValue(id)}`, () =>
-    client.get(toValue(id)),
-    { watch: isRef(id) ? [id] : undefined }
-  );
+  return useAsyncData(`account:${toValue(id)}`, () => client.get(toValue(id)), {
+    watch: isRef(id) ? [id] : undefined,
+  });
 }
 
 export function buildAccountRows(accounts: Account[]): AccountRow[] {
@@ -559,13 +670,20 @@ export function buildAccountRows(accounts: Account[]): AccountRow[] {
     const row: AccountRow = { ...account, subRows: [], depth };
     byId.set(account.id, row);
     const children = byParentId.get(account.id) ?? [];
-    row.subRows = children.map(c => buildRow(c, depth + 1));
+    row.subRows = children.map((c) => buildRow(c, depth + 1));
     return row;
   }
 
   const roots: AccountRow[] = [];
-  for (const type of [AccountType.Asset, AccountType.Liability, AccountType.Equity, AccountType.Income, AccountType.Expense]) {
-    const typeRoots = byParentId.get(null)?.filter(a => a.type === type) ?? [];
+  for (const type of [
+    AccountType.Asset,
+    AccountType.Liability,
+    AccountType.Equity,
+    AccountType.Income,
+    AccountType.Expense,
+  ]) {
+    const typeRoots =
+      byParentId.get(null)?.filter((a) => a.type === type) ?? [];
     for (const a of typeRoots) {
       roots.push(buildRow(a, 0));
     }
@@ -574,11 +692,14 @@ export function buildAccountRows(accounts: Account[]): AccountRow[] {
   return roots;
 }
 
-export function useAccountTree(accounts: Ref<Account[]>, showArchived: Ref<boolean>) {
+export function useAccountTree(
+  accounts: Ref<Account[]>,
+  showArchived: Ref<boolean>,
+) {
   const tree = computed<AccountRow[]>(() => {
     const filtered = showArchived.value
       ? accounts.value
-      : accounts.value.filter(a => !a.archived_at);
+      : accounts.value.filter((a) => !a.archived_at);
     return buildAccountRows(filtered);
   });
   return { tree };
@@ -605,6 +726,7 @@ git commit -m "feat: add account composables (useAccounts, useAccount, useAccoun
 ### Task 7: useCurrentJournal composable
 
 **Files:**
+
 - Create: `packages/shared/app/composables/useCurrentJournal.ts`
 
 - [ ] **Step 1: Write useCurrentJournal**
@@ -620,7 +742,8 @@ export function useCurrentJournal() {
 }
 ```
 
-This composable assumes the route param is `id` (from `/journals/:id/...`). It uses the existing `useJournal` composable.
+This composable assumes the route param is `id` (from
+`/journals/:id/...`). It uses the existing `useJournal` composable.
 
 - [ ] **Step 2: Commit**
 
@@ -634,11 +757,13 @@ git commit -m "feat: add useCurrentJournal composable"
 ### Task 8: layouts/journal.vue
 
 **Files:**
+
 - Create: `packages/shared/app/layouts/journal.vue`
 
 - [ ] **Step 1: Read existing layout pattern**
 
-Read `packages/shared/app/layouts/default.vue` — note the `<header>`, `<main>`, `<footer>` structure and the `<slot />`.
+Read `packages/shared/app/layouts/default.vue` — note the
+`<header>`, `<main>`, `<footer>` structure and the `<slot />`.
 
 - [ ] **Step 2: Write journal.vue layout**
 
@@ -652,7 +777,11 @@ const { data: journal } = useJournal(journalId);
 
 const menuItems = [
   { label: "Dashboard", to: `/journals/${journalId.value}`, enabled: true },
-  { label: "Accounts", to: `/journals/${journalId.value}/accounts`, enabled: true },
+  {
+    label: "Accounts",
+    to: `/journals/${journalId.value}/accounts`,
+    enabled: true,
+  },
   { label: "Records", to: "", enabled: false },
   { label: "Reports", to: "", enabled: false },
 ];
@@ -672,15 +801,19 @@ function isActive(path: string) {
               v-if="item.enabled"
               :to="item.to"
               class="block px-3 py-2 rounded text-sm transition-colors"
-              :class="isActive(item.to)
-                ? 'bg-primary/10 text-primary font-medium'
-                : 'text-on-surface-variant hover:bg-surface-variant'"
+              :class="
+                isActive(item.to)
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-on-surface-variant hover:bg-surface-variant'
+              "
             >
               {{ item.label }}
             </NuxtLink>
             <span
               v-else
-              class="block px-3 py-2 rounded text-sm text-on-surface-variant/30 cursor-not-allowed select-none"
+              class="block px-3 py-2 rounded text-sm
+                text-on-surface-variant/30 cursor-not-allowed
+                select-none"
             >
               {{ item.label }}
             </span>
@@ -695,9 +828,12 @@ function isActive(path: string) {
 </template>
 ```
 
-Note: `menuItems` uses `to` for active links and `enabled: false` for disabled placeholder items (Records, Reports). The `NuxtLink` used for active items; `<span>` for disabled placeholders.
+Note: `menuItems` uses `to` for active links and `enabled: false`
+for disabled placeholder items (Records, Reports). The `NuxtLink`
+used for active items; `<span>` for disabled placeholders.
 
-`journalId` is a computed ref — using it in template `:to` expressions works because Vue unwraps refs in templates.
+`journalId` is a computed ref — using it in template `:to`
+expressions works because Vue unwraps refs in templates.
 
 - [ ] **Step 3: Commit**
 
@@ -711,21 +847,29 @@ git commit -m "feat: add journal-scoped layout with side menu"
 ### Task 9: Enhance AppDataTable with expanding support
 
 **Files:**
+
 - Modify: `packages/shared/app/components/ui/AppDataTable.vue`
 
 - [ ] **Step 1: Read current AppDataTable**
 
-Read `packages/shared/app/components/ui/AppDataTable.vue` — note the existing props (`data`, `columns`), the `useVueTable` call with `getCoreRowModel`, `getSortedRowModel`, `getFilteredRowModel`. Note the template rendering `table.getRowModel().rows`.
+Read `packages/shared/app/components/ui/AppDataTable.vue` — note
+the existing props (`data`, `columns`), the `useVueTable` call
+with `getCoreRowModel`, `getSortedRowModel`,
+`getFilteredRowModel`. Note the template rendering
+`table.getRowModel().rows`.
 
 - [ ] **Step 2: Read existing AppDataTable test**
 
-Read `packages/shared/app/components/ui/AppDataTable.vue` based tests — there may be `AppDataTable.test.ts` or similar. We need to ensure existing tests pass after the change.
+Read `packages/shared/app/components/ui/AppDataTable.vue` based
+tests — there may be `AppDataTable.test.ts` or similar. We need to
+ensure existing tests pass after the change.
 
 - [ ] **Step 3: Add expanding support to AppDataTable**
 
 Modify `packages/shared/app/components/ui/AppDataTable.vue`. The changes are:
 
 **Imports — add:**
+
 ```ts
 import { getExpandedRowModel } from "@tanstack/vue-table";
 import type { ExpandedState } from "@tanstack/vue-table";
@@ -733,6 +877,7 @@ import { ref as importedRef } from "vue"; // if not already imported
 ```
 
 **Props — add `getSubRows` and `enableExpanding`:**
+
 ```ts
 const props = defineProps<{
   data: TData[];
@@ -743,6 +888,7 @@ const props = defineProps<{
 ```
 
 **State — add expanded state:**
+
 ```ts
 const expanded = importedRef<ExpandedState>({});
 ```
@@ -752,29 +898,48 @@ In the `useVueTable` call, add these only when `enableExpanding` is true:
 
 ```ts
 const table = useVueTable({
-  get data() { return props.data; },
-  get columns() { return props.columns; },
+  get data() {
+    return props.data;
+  },
+  get columns() {
+    return props.columns;
+  },
   state: {
-    get sorting() { return sorting.value; },
-    get columnFilters() { return columnFilters.value; },
-    ...(props.enableExpanding ? { get expanded() { return expanded.value; } } : {}),
+    get sorting() {
+      return sorting.value;
+    },
+    get columnFilters() {
+      return columnFilters.value;
+    },
+    ...(props.enableExpanding
+      ? {
+          get expanded() {
+            return expanded.value;
+          },
+        }
+      : {}),
   },
   onSortingChange: (updater) => {
-    sorting.value = typeof updater === "function" ? updater(sorting.value) : updater;
+    sorting.value =
+      typeof updater === "function" ? updater(sorting.value) : updater;
   },
   onColumnFiltersChange: (updater) => {
-    columnFilters.value = typeof updater === "function" ? updater(columnFilters.value) : updater;
+    columnFilters.value =
+      typeof updater === "function" ? updater(columnFilters.value) : updater;
   },
   onExpandedChange: props.enableExpanding
     ? (updater: any) => {
-        expanded.value = typeof updater === "function" ? updater(expanded.value) : updater;
+        expanded.value =
+          typeof updater === "function" ? updater(expanded.value) : updater;
       }
     : undefined,
   getSubRows: props.getSubRows,
   getCoreRowModel: getCoreRowModel(),
   getSortedRowModel: getSortedRowModel(),
   getFilteredRowModel: getFilteredRowModel(),
-  getExpandedRowModel: props.enableExpanding ? getExpandedRowModel() : undefined,
+  getExpandedRowModel: props.enableExpanding
+    ? getExpandedRowModel()
+    : undefined,
 });
 ```
 
@@ -784,7 +949,8 @@ const table = useVueTable({
 pnpm vitest run packages/shared/app/components/ui/
 ```
 
-Expected: All existing UI component tests PASS. AppDataTable without expanding props works identically.
+Expected: All existing UI component tests PASS. AppDataTable
+without expanding props works identically.
 
 - [ ] **Step 5: Commit**
 
@@ -798,9 +964,9 @@ git commit -m "feat: add optional expanding support to AppDataTable"
 ### Task 10: AccountTable component
 
 **Files:**
+
 - Create: `packages/shared/app/components/AccountTable.vue`
 - Test: `packages/shared/app/components/AccountTable.test.ts`
-
 - [ ] **Step 1: Write the test**
 
 Create `packages/shared/app/components/AccountTable.test.ts`:
@@ -854,7 +1020,9 @@ describe("AccountTable", () => {
     const wrapper = mountWithPlugins(AccountTable, { props: { data } });
     // Find any button with lucide:plus icon in the actions column
     const buttons = wrapper.findAllComponents({ name: "AppButton" });
-    const plusBtn = buttons.find(b => b.attributes("aria-label")?.includes("Add"));
+    const plusBtn = buttons.find((b) =>
+      b.attributes("aria-label")?.includes("Add"),
+    );
     if (plusBtn) {
       await plusBtn.trigger("click");
       expect(wrapper.emitted("create")).toBeTruthy();
@@ -864,7 +1032,14 @@ describe("AccountTable", () => {
 
   it("shows archived badge for archived accounts", () => {
     const data: AccountRow[] = [
-      makeRow({ id: "c1", type: AccountType.Asset, name: "Bank", parent_id: "a1", parentId: "a1", archived_at: "2024-01-01" }),
+      makeRow({
+        id: "c1",
+        type: AccountType.Asset,
+        name: "Bank",
+        parent_id: "a1",
+        parentId: "a1",
+        archived_at: "2024-01-01",
+      }),
     ];
     const wrapper = mountWithPlugins(AccountTable, { props: { data } });
     expect(wrapper.text()).toContain("Archived");
@@ -925,15 +1100,22 @@ const columns: ColumnDef<AccountRow, unknown>[] = [
       const account = row.original;
       return h("div", { class: "flex items-center gap-2" }, [
         row.getCanExpand()
-          ? h(AppButton, {
-              variant: "ghost",
-              size: "sm",
-              "aria-label": account.name,
-              onClick: row.getToggleExpandedHandler(),
-            }, () => h(AppIcon, {
-              icon: row.getIsExpanded() ? "lucide:chevron-down" : "lucide:chevron-right",
-              size: "sm",
-            }))
+          ? h(
+              AppButton,
+              {
+                variant: "ghost",
+                size: "sm",
+                "aria-label": account.name,
+                onClick: row.getToggleExpandedHandler(),
+              },
+              () =>
+                h(AppIcon, {
+                  icon: row.getIsExpanded()
+                    ? "lucide:chevron-down"
+                    : "lucide:chevron-right",
+                  size: "sm",
+                }),
+            )
           : h("span", { class: "w-6 inline-block" }),
 
         h(AppIcon, {
@@ -941,13 +1123,29 @@ const columns: ColumnDef<AccountRow, unknown>[] = [
           size: "sm",
         }),
 
-        h("span", {
-          class: account.parent_id === null ? "font-semibold text-on-surface" : "text-on-surface",
-          style: { paddingLeft: `${account.depth * 12}px` },
-        }, account.name),
+        h(
+          "span",
+          {
+            class:
+              account.parent_id === null
+                ? "font-semibold text-on-surface"
+                : "text-on-surface",
+            style: { paddingLeft: `${account.depth * 12}px` },
+          },
+          account.name,
+        ),
 
         account.archived_at
-          ? h("span", { class: "text-xs px-1.5 py-0.5 rounded bg-surface-variant text-on-surface-variant ml-2" }, "Archived")
+          ? h(
+              "span",
+              {
+                class:
+                  "text-xs px-1.5 py-0.5 rounded" +
+                  " bg-surface-variant" +
+                  " text-on-surface-variant ml-2",
+              },
+              "Archived",
+            )
           : null,
       ]);
     },
@@ -958,8 +1156,12 @@ const columns: ColumnDef<AccountRow, unknown>[] = [
     cell: ({ row }) => {
       const tags = row.original.tags;
       if (!tags.length) return null;
-      return h("div", { class: "flex flex-wrap gap-1" },
-        tags.map(tag => h(AppChip, { variant: "tonal", size: "sm" }, () => tag))
+      return h(
+        "div",
+        { class: "flex flex-wrap gap-1" },
+        tags.map((tag) =>
+          h(AppChip, { variant: "tonal", size: "sm" }, () => tag),
+        ),
       );
     },
   },
@@ -974,41 +1176,61 @@ const columns: ColumnDef<AccountRow, unknown>[] = [
       const buttons: ReturnType<typeof h>[] = [];
 
       buttons.push(
-        h(AppButton, {
-          variant: "ghost", size: "sm",
-          "aria-label": `Add child account under ${account.name}`,
-          onClick: () => emit("create", account.id),
-        }, () => h(AppIcon, { icon: "lucide:plus", size: "sm" }))
+        h(
+          AppButton,
+          {
+            variant: "ghost",
+            size: "sm",
+            "aria-label": `Add child account under ${account.name}`,
+            onClick: () => emit("create", account.id),
+          },
+          () => h(AppIcon, { icon: "lucide:plus", size: "sm" }),
+        ),
       );
 
       if (!isRoot) {
         buttons.push(
-          h(AppButton, {
-            variant: "ghost", size: "sm",
-            "aria-label": `Edit ${account.name}`,
-            onClick: () => emit("edit", account as Account),
-          }, () => h(AppIcon, { icon: "lucide:pencil", size: "sm" }))
+          h(
+            AppButton,
+            {
+              variant: "ghost",
+              size: "sm",
+              "aria-label": `Edit ${account.name}`,
+              onClick: () => emit("edit", account as Account),
+            },
+            () => h(AppIcon, { icon: "lucide:pencil", size: "sm" }),
+          ),
         );
       }
 
       if (!isRoot && !isArchived) {
         buttons.push(
-          h(AppButton, {
-            variant: "ghost", size: "sm",
-            "aria-label": `Archive ${account.name}`,
-            onClick: () => emit("archive", account as Account),
-          }, () => h(AppIcon, { icon: "lucide:archive", size: "sm" }))
+          h(
+            AppButton,
+            {
+              variant: "ghost",
+              size: "sm",
+              "aria-label": `Archive ${account.name}`,
+              onClick: () => emit("archive", account as Account),
+            },
+            () => h(AppIcon, { icon: "lucide:archive", size: "sm" }),
+          ),
         );
       }
 
       if (!isRoot) {
         buttons.push(
-          h(AppButton, {
-            variant: "ghost", size: "sm",
-            class: "text-error",
-            "aria-label": `Delete ${account.name}`,
-            onClick: () => emit("delete", account as Account),
-          }, () => h(AppIcon, { icon: "lucide:trash-2", size: "sm" }))
+          h(
+            AppButton,
+            {
+              variant: "ghost",
+              size: "sm",
+              class: "text-error",
+              "aria-label": `Delete ${account.name}`,
+              onClick: () => emit("delete", account as Account),
+            },
+            () => h(AppIcon, { icon: "lucide:trash-2", size: "sm" }),
+          ),
         );
       }
 
@@ -1044,7 +1266,8 @@ function getSubRows(row: AccountRow): AccountRow[] {
 pnpm vitest run packages/shared/app/components/AccountTable.test.ts
 ```
 
-Expected: PASS (may need adjustment for `mountWithPlugins` pattern — read the helper first).
+Expected: PASS (may need adjustment for `mountWithPlugins` pattern
+— read the helper first).
 
 - [ ] **Step 7: Commit**
 
@@ -1058,12 +1281,14 @@ git commit -m "feat: add AccountTable component with expanding support"
 ### Task 11: AccountForm component
 
 **Files:**
+
 - Create: `packages/shared/app/components/AccountForm.vue`
 - Test: `packages/shared/app/components/AccountForm.test.ts`
-
 - [ ] **Step 1: Read existing form pattern**
 
-Read `packages/shared/app/components/JournalForm.vue` — note the `initial` prop pattern, `watch` for prop changes, `emit("submit", data)` pattern. Mirror this for `AccountForm`.
+Read `packages/shared/app/components/JournalForm.vue` — note the
+`initial` prop pattern, `watch` for prop changes,
+`emit("submit", data)` pattern. Mirror this for `AccountForm`.
 
 - [ ] **Step 2: Write the test**
 
@@ -1083,7 +1308,7 @@ describe("AccountForm", () => {
     expect(wrapper.text()).toContain("Asset > Bank");
   });
 
-  it('emits submit with form data', async () => {
+  it("emits submit with form data", async () => {
     const wrapper = mountWithPlugins(AccountForm, {
       props: { parentPath: "" },
     });
@@ -1102,12 +1327,13 @@ describe("AccountForm", () => {
     });
   });
 
-  it('emits cancel when cancel button is clicked', async () => {
+  it("emits cancel when cancel button is clicked", async () => {
     const wrapper = mountWithPlugins(AccountForm, {
       props: { parentPath: "" },
     });
-    const cancelBtn = wrapper.findAllComponents({ name: "AppButton" })
-      .find(b => b.text() === "Cancel");
+    const cancelBtn = wrapper
+      .findAllComponents({ name: "AppButton" })
+      .find((b) => b.text() === "Cancel");
     if (cancelBtn) {
       await cancelBtn.trigger("click");
       expect(wrapper.emitted("cancel")).toBeTruthy();
@@ -1168,7 +1394,12 @@ function validate(): boolean {
     error.value = "Name is required.";
     return false;
   }
-  if (RESERVED_NAMES.some(r => r.localeCompare(name.value, undefined, { sensitivity: "base" }) === 0)) {
+  if (
+    RESERVED_NAMES.some(
+      (r) =>
+        r.localeCompare(name.value, undefined, { sensitivity: "base" }) === 0,
+    )
+  ) {
     error.value = `"${name.value}" is a reserved root account name.`;
     return false;
   }
@@ -1193,7 +1424,9 @@ function handleSubmit() {
     </div>
 
     <div>
-      <label for="account-name" class="block text-sm font-medium mb-1">Name</label>
+      <label for="account-name" class="block text-sm font-medium mb-1"
+        >Name</label
+      >
       <AppInput
         id="account-name"
         v-model="name"
@@ -1202,7 +1435,9 @@ function handleSubmit() {
       />
     </div>
     <div>
-      <label for="account-description" class="block text-sm font-medium mb-1">Description</label>
+      <label for="account-description" class="block text-sm font-medium mb-1"
+        >Description</label
+      >
       <AppTextarea
         id="account-description"
         v-model="description"
@@ -1249,9 +1484,9 @@ git commit -m "feat: add AccountForm component"
 ### Task 12: AccountArchiveConfirm and AccountDeleteConfirm components
 
 **Files:**
+
 - Create: `packages/shared/app/components/AccountArchiveConfirm.vue`
 - Create: `packages/shared/app/components/AccountDeleteConfirm.vue`
-
 - [ ] **Step 1: Write AccountArchiveConfirm**
 
 Create `packages/shared/app/components/AccountArchiveConfirm.vue`:
@@ -1275,13 +1510,14 @@ const emit = defineEmits<{
 <template>
   <div class="flex flex-col gap-4">
     <p class="text-sm text-on-surface">
-      Archive account <strong>{{ account.name }}</strong>?
+      Archive account <strong>{{ account.name }}</strong
+      >?
     </p>
     <p class="text-sm text-on-surface-variant">
       This will also archive
       <strong>{{ cascadeCount }}</strong> descendant
-      {{ cascadeCount === 1 ? "account" : "accounts" }}.
-      Archived accounts cannot receive new records, but their history is preserved.
+      {{ cascadeCount === 1 ? "account" : "accounts" }}. Archived accounts
+      cannot receive new records, but their history is preserved.
     </p>
     <div class="flex justify-end gap-2 pt-2">
       <AppButton variant="outlined" @click="emit('cancel')">Cancel</AppButton>
@@ -1319,14 +1555,14 @@ const deleteEnabled = computed(() => confirmName.value === props.account.name);
 <template>
   <div class="flex flex-col gap-4">
     <p class="text-sm text-on-surface">
-      Delete account <strong>{{ account.name }}</strong>?
+      Delete account <strong>{{ account.name }}</strong
+      >?
     </p>
     <p class="text-sm text-on-surface-variant">
       This permanently deletes <strong>{{ account.name }}</strong> and
       <strong>{{ cascadeCount }}</strong> descendant
-      {{ cascadeCount === 1 ? "account" : "accounts" }}.
-      Any records still posting to these accounts will fail to load.
-      This action cannot be undone.
+      {{ cascadeCount === 1 ? "account" : "accounts" }}. Any records still
+      posting to these accounts will fail to load. This action cannot be undone.
     </p>
     <div>
       <label for="delete-confirm" class="block text-sm mb-1">
@@ -1365,11 +1601,13 @@ git commit -m "feat: add AccountArchiveConfirm and AccountDeleteConfirm componen
 ### Task 13: Accounts page (`/journals/:id/accounts`)
 
 **Files:**
+
 - Create: `packages/shared/app/pages/journals/[id]/accounts.vue`
 
 - [ ] **Step 1: Read existing page pattern**
 
-Read `packages/shared/app/pages/index.vue` — note how dialogs are managed, error handling, `useAsyncData` status checks.
+Read `packages/shared/app/pages/index.vue` — note how dialogs are
+managed, error handling, `useAsyncData` status checks.
 
 - [ ] **Step 2: Write the accounts page**
 
@@ -1391,7 +1629,11 @@ import AccountDeleteConfirm from "../../components/AccountDeleteConfirm.vue";
 definePageMeta({ layout: "journal" });
 
 const { journalId } = useCurrentJournal();
-const { data: accounts, status, refresh: refreshAccounts } = useAccounts(journalId);
+const {
+  data: accounts,
+  status,
+  refresh: refreshAccounts,
+} = useAccounts(journalId);
 
 const showArchived = ref(false);
 
@@ -1483,7 +1725,7 @@ function countDescendants(accountId: string, rows: typeof tree.value): number {
   return -1;
 }
 
-function countAll(row: typeof tree.value[0]): number {
+function countAll(row: (typeof tree.value)[0]): number {
   let count = row.subRows.length;
   for (const c of row.subRows) count += countAll(c);
   return count;
@@ -1491,7 +1733,10 @@ function countAll(row: typeof tree.value[0]): number {
 
 function openArchive(account: Account) {
   archivingAccount.value = account;
-  archiveCascadeCount.value = Math.max(0, countDescendants(account.id, tree.value));
+  archiveCascadeCount.value = Math.max(
+    0,
+    countDescendants(account.id, tree.value),
+  );
   showArchiveDialog.value = true;
   mutationError.value = null;
 }
@@ -1516,7 +1761,10 @@ const deleteCascadeCount = ref(0);
 
 function openDelete(account: Account) {
   deletingAccount.value = account;
-  deleteCascadeCount.value = Math.max(0, countDescendants(account.id, tree.value));
+  deleteCascadeCount.value = Math.max(
+    0,
+    countDescendants(account.id, tree.value),
+  );
   showDeleteDialog.value = true;
   mutationError.value = null;
 }
@@ -1541,15 +1789,25 @@ async function confirmDelete() {
     <div class="flex items-center justify-between gap-4">
       <h1 class="text-xl font-bold text-on-background">Accounts</h1>
       <div class="flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none">
-          <input type="checkbox" :checked="showArchived" @change="showArchived = !showArchived" />
+        <label
+          class="flex items-center gap-2 text-sm
+            text-on-surface-variant cursor-pointer select-none"
+        >
+          <input
+            type="checkbox"
+            :checked="showArchived"
+            @change="showArchived = !showArchived"
+          />
           Show archived
         </label>
       </div>
     </div>
 
     <!-- Search -->
-    <AppInput v-model="searchQuery" placeholder="Search accounts by name or tag…" />
+    <AppInput
+      v-model="searchQuery"
+      placeholder="Search accounts by name or tag…"
+    />
 
     <!-- Error banner -->
     <div
@@ -1642,6 +1900,7 @@ git commit -m "feat: add Accounts page with full CRUD"
 ### Task 14: Minimal Journal Dashboard (`/journals/:id`)
 
 **Files:**
+
 - Create: `packages/shared/app/pages/journals/[id].vue`
 
 - [ ] **Step 1: Write the dashboard page**
@@ -1667,11 +1926,19 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
     <!-- Journal header -->
     <div>
       <h1 class="text-xl font-bold text-on-background">{{ journal.name }}</h1>
-      <p v-if="journal.description" class="text-sm text-on-surface-variant mt-1">
+      <p
+        v-if="journal.description"
+        class="text-sm text-on-surface-variant mt-1"
+      >
         {{ journal.description }}
       </p>
       <div v-if="journal.tags?.length" class="flex flex-wrap gap-1 mt-2">
-        <AppChip v-for="tag in journal.tags" :key="tag" variant="tonal" size="sm">
+        <AppChip
+          v-for="tag in journal.tags"
+          :key="tag"
+          variant="tonal"
+          size="sm"
+        >
           {{ tag }}
         </AppChip>
       </div>
@@ -1685,7 +1952,11 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
         @click="navigateTo(`/journals/${journalId}/accounts`)"
       >
         <div class="flex items-center gap-3">
-          <AppIcon icon="lucide:folder-tree" size="md" class="text-primary shrink-0" />
+          <AppIcon
+            icon="lucide:folder-tree"
+            size="md"
+            class="text-primary shrink-0"
+          />
           <div>
             <h3 class="font-semibold text-on-surface">Accounts</h3>
             <p class="text-sm text-on-surface-variant">
@@ -1697,7 +1968,11 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
 
       <AppCard variant="outlined" class="p-4 opacity-40 select-none">
         <div class="flex items-center gap-3">
-          <AppIcon icon="lucide:list" size="md" class="text-on-surface-variant/40 shrink-0" />
+          <AppIcon
+            icon="lucide:list"
+            size="md"
+            class="text-on-surface-variant/40 shrink-0"
+          />
           <div>
             <h3 class="font-semibold text-on-surface">Records</h3>
             <p class="text-sm text-on-surface-variant">Coming soon</p>
@@ -1707,7 +1982,11 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
 
       <AppCard variant="outlined" class="p-4 opacity-40 select-none">
         <div class="flex items-center gap-3">
-          <AppIcon icon="lucide:bar-chart-3" size="md" class="text-on-surface-variant/40 shrink-0" />
+          <AppIcon
+            icon="lucide:bar-chart-3"
+            size="md"
+            class="text-on-surface-variant/40 shrink-0"
+          />
           <div>
             <h3 class="font-semibold text-on-surface">Reports</h3>
             <p class="text-sm text-on-surface-variant">Coming soon</p>
@@ -1717,7 +1996,11 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
 
       <AppCard variant="outlined" class="p-4 opacity-40 select-none">
         <div class="flex items-center gap-3">
-          <AppIcon icon="lucide:settings" size="md" class="text-on-surface-variant/40 shrink-0" />
+          <AppIcon
+            icon="lucide:settings"
+            size="md"
+            class="text-on-surface-variant/40 shrink-0"
+          />
           <div>
             <h3 class="font-semibold text-on-surface">Settings</h3>
             <p class="text-sm text-on-surface-variant">Coming soon</p>
@@ -1741,15 +2024,19 @@ git commit -m "feat: add minimal Journal Dashboard page"
 ### Task 15: Verify JournalCard navigation
 
 **Files:**
+
 - Verify: `packages/shared/app/pages/index.vue`
 
 - [ ] **Step 1: Check JournalCard click handler**
 
-Read `packages/shared/app/pages/index.vue` around the `JournalCard` usage. It should already navigate to `/journals/${journal.id}`.
+Read `packages/shared/app/pages/index.vue` around the `JournalCard`
+usage. It should already navigate to `/journals/${journal.id}`.
 
 - [ ] **Step 2: Verify — no changes needed if navigation exists**
 
-The existing code at line 172 (`@click="navigateTo(`/journals/${journal.id}`)"`) already navigates correctly. No changes required.
+The existing code at line 172
+(`@click="navigateTo(`/journals/${journal.id}`)"`) already
+navigates correctly. No changes required.
 
 - [ ] **Step 3: Mark as complete**
 
@@ -1760,6 +2047,7 @@ No code changes in this task.
 ### Task 16: TypeScript type check and integration test
 
 **Files:**
+
 - All new files
 
 - [ ] **Step 1: Run TypeScript type check**
@@ -1769,6 +2057,7 @@ npx nuxi typecheck
 ```
 
 If using pnpm:
+
 ```bash
 pnpm run typecheck
 ```
@@ -1779,9 +2068,15 @@ Expected: No type errors.
 
 - [ ] **Step 2: Fix any type errors**
 
-- Import paths may need adjustment. `AccountTable.vue` imports from `../models` — verify the relative path is correct.
-- `useCurrentJournal` imports `useJournal` from `./journal` — should be auto-imported by Nuxt.
-- Page components should use `definePageMeta({ layout: "journal" })` or `<NuxtLayout name="journal">`.
+- Import paths may need adjustment. `AccountTable.vue` imports from
+  `../models` — verify the relative path is correct.
+
+- `useCurrentJournal` imports `useJournal` from `./journal` —
+  should be auto-imported by Nuxt.
+
+- Page components should use
+  `definePageMeta({ layout: "journal" })` or
+  `<NuxtLayout name="journal">`.
 
 - [ ] **Step 3: Run all existing tests**
 

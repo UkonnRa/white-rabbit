@@ -13,13 +13,12 @@ describe("AccountType", () => {
 });
 
 describe("CreateAccountRequest", () => {
-  it("accepts type field", () => {
+  it("accepts required fields", () => {
     const req: CreateAccountRequest = {
-      journal_id: "j1",
-      parent_id: null,
-      type: AccountType.Asset,
+      journalId: "j1",
+      parentId: "p1",
       name: "Cash",
     };
-    expect(req.type).toBe(AccountType.Asset);
+    expect(req.name).toBe("Cash");
   });
 });

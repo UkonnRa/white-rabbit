@@ -21,23 +21,24 @@ levels), and make the hierarchy legible at a glance.
 
 ## 2. Use Cases
 
-| #     | Actor | Action                                       | Outcome                                                             |
-| ----- | ----- | -------------------------------------------- | ------------------------------------------------------------------- |
-| UC-1  | User  | Opens `/journals/:id/accounts`               | Sees the full account tree with the 5 roots expanded               |
-| UC-2  | User  | Expands / collapses a subtree                | Children show / hide; state persists within the session            |
-| UC-3  | User  | Clicks "Add child" on an account             | Create dialog opens with that account preset as the parent        |
-| UC-4  | User  | Edits an account's name/description/tags    | Edit dialog opens; submit updates the node in place                |
-| UC-5  | User  | Archives an account                          | Confirmation dialog warns about cascade → archives node + descendants |
-| UC-6  | User  | Un-archives an account                       | _(Backend gap — see §11)_                                          |
-| UC-7  | User  | Deletes an account                           | Confirmation dialog warns about cascade → deletes node + descendants |
-| UC-8  | User  | Searches / filters by name or tag            | Tree filters to matching nodes, keeping ancestors visible         |
-| UC-9  | User  | Toggles "Show archived"                      | Archived nodes appear greyed out or hidden entirely                |
+| #    | Actor | Action                                   | Outcome                                                               |
+| ---- | ----- | ---------------------------------------- | --------------------------------------------------------------------- |
+| UC-1 | User  | Opens `/journals/:id/accounts`           | Sees the full account tree with the 5 roots expanded                  |
+| UC-2 | User  | Expands / collapses a subtree            | Children show / hide; state persists within the session               |
+| UC-3 | User  | Clicks "Add child" on an account         | Create dialog opens with that account preset as the parent            |
+| UC-4 | User  | Edits an account's name/description/tags | Edit dialog opens; submit updates the node in place                   |
+| UC-5 | User  | Archives an account                      | Confirmation dialog warns about cascade → archives node + descendants |
+| UC-6 | User  | Un-archives an account                   | _(Backend gap — see §11)_                                             |
+| UC-7 | User  | Deletes an account                       | Confirmation dialog warns about cascade → deletes node + descendants  |
+| UC-8 | User  | Searches / filters by name or tag        | Tree filters to matching nodes, keeping ancestors visible             |
+| UC-9 | User  | Toggles "Show archived"                  | Archived nodes appear greyed out or hidden entirely                   |
 
 ## 3. Information Architecture
 
 ```text
 /                           ← Journals list
-/journals/:id               ← Journal Dashboard — stats summary + nav cards (see journal.md)
+/journals/:id               ← Journal Dashboard
+                                (stats + nav cards, see journal.md)
 /journals/:id/accounts      ← Accounts page (this doc) — full tree CRUD
 /journals/:id/records       ← Records list (future)
 /journals/:id/reports/...   ← Reports (future)
@@ -106,20 +107,20 @@ Each segment links back to its page (`/` and `/journals/:id`).
 This is the first page that needs the side menu. It must be introduced
 with this slice.
 
-| Page                        | Side menu? | Content                                                   |
-| --------------------------- | ---------- | --------------------------------------------------------- |
-| `/` (Journals)              | **No**     | Uses `layouts/default.vue`                                |
-| `/journals/:id/...`         | **Yes**    | Uses `layouts/journal.vue` (new)                          |
+| Page                | Side menu? | Content                          |
+| ------------------- | ---------- | -------------------------------- |
+| `/` (Journals)      | **No**     | Uses `layouts/default.vue`       |
+| `/journals/:id/...` | **Yes**    | Uses `layouts/journal.vue` (new) |
 
 `layouts/journal.vue` wraps `layouts/default.vue`'s header/footer and
 adds the side menu. Side-menu items for this slice:
 
-| Item      | Route                         | Status in this slice |
-| --------- | ----------------------------- | -------------------- |
-| Dashboard | `/journals/:id`               | Stats + nav cards (see journal.md) |
-| Accounts  | `/journals/:id/accounts`      | **This page**        |
-| Records   | `/journals/:id/records`       | Disabled placeholder |
-| Reports   | `/journals/:id/reports`       | Disabled placeholder |
+| Item      | Route                    | Status in this slice               |
+| --------- | ------------------------ | ---------------------------------- |
+| Dashboard | `/journals/:id`          | Stats + nav cards (see journal.md) |
+| Accounts  | `/journals/:id/accounts` | **This page**                      |
+| Records   | `/journals/:id/records`  | Disabled placeholder               |
+| Reports   | `/journals/:id/reports`  | Disabled placeholder               |
 
 The side menu is journal-scoped — it reads `journalId` from the route
 and exposes it to the page via a `useCurrentJournal()` composable (new).
@@ -134,31 +135,35 @@ top-level rows; all other accounts are nested under their parent via `subRows`.
 
 ### 5.1 Column Definitions
 
-| Column    | Data source         | Format                                                                 |
-| --------- | ------------------- | ---------------------------------------------------------------------- |
-| Name      | `account`           | Expand chevron + type icon (per `AccountType`) + account name (left-padded by depth × 12px) + "Archived" badge (if `archived_at`). Roots are bold; leaf accounts (no children) show no chevron. |
-| Tags      | `account.tags`      | `AppChip` components. Hidden when empty.                               |
-| Actions   | —                   | `[+] add child` (always), `[✎] edit` (non-root), `[archive]` (non-root, non-archived), `[🗑] delete` (non-root). Delete disabled with tooltip when records reference this account (future). |
+| Column  | Data source    | Format                                                                                                                                                                                          |
+| ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name    | `account`      | Expand chevron + type icon (per `AccountType`) + account name (left-padded by depth × 12px) + "Archived" badge (if `archived_at`). Roots are bold; leaf accounts (no children) show no chevron. |
+| Tags    | `account.tags` | `AppChip` components. Hidden when empty.                                                                                                                                                        |
+| Actions | —              | `[+] add child` (always), `[✎] edit` (non-root), `[archive]` (non-root, non-archived), `[🗑] delete` (non-root). Delete disabled with tooltip when records reference this account (future).     |
 
 Future columns (gated on records):
-- **Commodities** — count of unique currency/commodity symbols across records posting to this account. Shown as `"—"` initially.
-- **Records** — count of records posting to this account. Shown as `"—"` initially.
+
+- **Commodities** — count of unique currency/commodity symbols across
+  records posting to this account. Shown as `"—"` initially.
+- **Records** — count of records posting to this account.
+  Shown as `"—"` initially.
 
 ### 5.2 Row Interactions
 
-| Interaction             | Behavior                                                                 |
-| ----------------------- | ------------------------------------------------------------------------ |
-| Click expand chevron    | Toggles child rows visibility via `row.getToggleExpandedHandler()`.      |
-| Click `[+]`             | Open create dialog with this account preset as parent.                   |
-| Click `[✎]` edit        | Open edit dialog. Disabled on the 5 roots.                               |
-| Click `[archive]`       | Open archive-confirm dialog. Disabled on roots and already-archived.     |
-| Click `[🗑]` delete     | Open delete-confirm dialog. Disabled on roots. In future: disabled with tooltip "Cannot delete: N records reference this account" when records exist. |
-| Click column header     | Sort by that column (TanStack sorting).                                  |
+| Interaction          | Behavior                                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Click expand chevron | Toggles child rows visibility via `row.getToggleExpandedHandler()`.                                                                                   |
+| Click `[+]`          | Open create dialog with this account preset as parent.                                                                                                |
+| Click `[✎]` edit     | Open edit dialog. Disabled on the 5 roots.                                                                                                            |
+| Click `[archive]`    | Open archive-confirm dialog. Disabled on roots and already-archived.                                                                                  |
+| Click `[🗑]` delete  | Open delete-confirm dialog. Disabled on roots. In future: disabled with tooltip "Cannot delete: N records reference this account" when records exist. |
+| Click column header  | Sort by that column (TanStack sorting).                                                                                                               |
 
 ### 5.3 Root Account Treatment
 
 The 5 roots (Asset, Liability, Equity, Income, Expense) are top-level
 rows (parent_id = null) with:
+
 - Bold font weight.
 - Type-colored left-border accent (asset/income = green family,
   liability/expense = red family, equity = neutral).
@@ -189,6 +194,7 @@ No accounts found. Create one with the [+] button on a root account.
 
 Flat `Account[]` from `AccountClient.list()` is transformed into nested
 `AccountRow[]` client-side:
+
 1. Partition the flat list by `type` into 5 buckets.
 2. Within each bucket, index by `parent_id`.
 3. Recursively attach children as `subRows`, computing `depth` per row.
@@ -205,13 +211,13 @@ Triggered by any `[+]` action or the "Add account" inline CTA. Opens an
 user clicked from and displayed as a read-only breadcrumb at the top of
 the form (`Asset > Bank > …`). The form fields are:
 
-| Field        | Control        | Rule                                                         |
-| ------------ | -------------- | ------------------------------------------------------------ |
-| Parent       | Read-only path | Preset from the `[+]` row clicked. Displayed as a breadcrumb (`Asset > Bank > …`). |
-| Type         | Read-only      | Inherited from parent — displayed for clarity, not editable  |
-| Name         | `AppInput`     | Required, non-empty, must not match reserved root names      |
-| Description  | `AppTextarea`  | Optional                                                     |
-| Tags         | `AppTagInput`  | Optional                                                     |
+| Field       | Control        | Rule                                                                               |
+| ----------- | -------------- | ---------------------------------------------------------------------------------- |
+| Parent      | Read-only path | Preset from the `[+]` row clicked. Displayed as a breadcrumb (`Asset > Bank > …`). |
+| Type        | Read-only      | Inherited from parent — displayed for clarity, not editable                        |
+| Name        | `AppInput`     | Required, non-empty, must not match reserved root names                            |
+| Description | `AppTextarea`  | Optional                                                                           |
+| Tags        | `AppTagInput`  | Optional                                                                           |
 
 Reserved-name validation happens client-side for fast feedback and is
 re-checked by the domain (`Account::is_reserved_name`) on submit.
@@ -278,23 +284,23 @@ table usage (without expanding) is unaffected.
 
 Live in `app/components/` (not `ui/`) — specific to the Accounts page.
 
-| Component                     | Responsibility                                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `AccountTable.vue`            | Renders accounts as an expandable TanStack Table. Uses enhanced `AppDataTable`. Defines columns, owns expanded state. |
-| `AccountForm.vue`             | Create/edit form. Mirrors `JournalForm.vue`. Parent path displayed as read-only breadcrumb. Emits `submit`, `cancel`. |
-| `AccountArchiveConfirm.vue`   | Archive confirmation dialog content — name + cascade preview.                                                  |
-| `AccountDeleteConfirm.vue`    | Delete confirmation dialog content — name + cascade preview + typed-name gate.                                 |
+| Component                   | Responsibility                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `AccountTable.vue`          | Renders accounts as an expandable TanStack Table. Uses enhanced `AppDataTable`. Defines columns, owns expanded state. |
+| `AccountForm.vue`           | Create/edit form. Mirrors `JournalForm.vue`. Parent path displayed as read-only breadcrumb. Emits `submit`, `cancel`. |
+| `AccountArchiveConfirm.vue` | Archive confirmation dialog content — name + cascade preview.                                                         |
+| `AccountDeleteConfirm.vue`  | Delete confirmation dialog content — name + cascade preview + typed-name gate.                                        |
 
 ### 7.3 Layout and Composables (new)
 
-| Item                                       | Responsibility                                                                                                         |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `layouts/journal.vue`                      | Journal-scoped shell: header breadcrumb + side menu. Reads `journalId` from route and loads the journal once.          |
-| `composables/useCurrentJournal.ts`         | Exposes the currently-scoped `Journal` and its `id` to any component under the `journal` layout.                       |
-| `composables/account.ts`                   | `useAccounts(journalId)` — list all accounts for one journal; `useAccount(id)` — single lookup. Built on `useAsyncData`. |
-| `composables/useAccountClient.ts`          | Injects the registered `$accountClient`.                                                                               |
-| `clients/account-client.ts`                | `AccountClient` interface — `create / get / list / update / delete / archive`. Declares `$accountClient` on NuxtApp.    |
-| `models/account.ts`                        | `Account`, `CreateAccountRequest`, `UpdateAccountRequest`, `AccountFilter`, `AccountFormData`, `AccountType` enum.      |
+| Item                               | Responsibility                                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `layouts/journal.vue`              | Journal-scoped shell: header breadcrumb + side menu. Reads `journalId` from route and loads the journal once.            |
+| `composables/useCurrentJournal.ts` | Exposes the currently-scoped `Journal` and its `id` to any component under the `journal` layout.                         |
+| `composables/account.ts`           | `useAccounts(journalId)` — list all accounts for one journal; `useAccount(id)` — single lookup. Built on `useAsyncData`. |
+| `composables/useAccountClient.ts`  | Injects the registered `$accountClient`.                                                                                 |
+| `clients/account-client.ts`        | `AccountClient` interface — `create / get / list / update / delete / archive`. Declares `$accountClient` on NuxtApp.     |
+| `models/account.ts`                | `Account`, `CreateAccountRequest`, `UpdateAccountRequest`, `AccountFilter`, `AccountFormData`, `AccountType` enum.       |
 
 ## 8. Filter / Search Behavior
 
@@ -314,11 +320,11 @@ A single search input above the table filters by account name and tags
 
 ## 9. Responsive Behavior
 
-| Breakpoint          | Layout                                                              |
-| ------------------- | ------------------------------------------------------------------- |
+| Breakpoint          | Layout                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | < 640px (mobile)    | Side menu collapses to a drawer (hamburger). Table takes full width. Action slot collapses into a single overflow `[⋯]` menu per row. |
-| 640–1024px (tablet) | Side menu as icon rail, expands on hover. Actions inline.          |
-| > 1024px (desktop)  | Side menu fully expanded. Actions inline.                           |
+| 640–1024px (tablet) | Side menu as icon rail, expands on hover. Actions inline.                                                                             |
+| > 1024px (desktop)  | Side menu fully expanded. Actions inline.                                                                                             |
 
 ## 10. Page Route and Data Flow
 
@@ -344,12 +350,12 @@ search, filters, and the parent picker.
 
 This spec assumes the following work lands alongside or before the UI.
 
-| Gap                                                                                 | Where              |
-| ----------------------------------------------------------------------------------- | ------------------ |
-| `archive_account` Tauri command is **exposed in the accounts-page slice**. | endpoint-tauri     |
+| Gap                                                                                                                                                                                       | Where                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `archive_account` Tauri command is **exposed in the accounts-page slice**.                                                                                                                | endpoint-tauri                         |
 | Un-archive is **not in the domain** at all — `AccountCommand::Archive` only sets `archived_at`, and there is no `Unarchive` command. Treat un-archive as a future item; UC-6 is deferred. | `crates/domain/src/account/command.rs` |
-| No "move account" operation exists and none is planned (tree structure is immutable per `features.md` §2). The UI must never offer one. | domain             |
-| No currency / commodity annotation on accounts yet (noted in `features.md` §2 as planned). The tree row has space reserved but renders nothing for it in this slice. | domain             |
+| No "move account" operation exists and none is planned (tree structure is immutable per `features.md` §2). The UI must never offer one.                                                   | domain                                 |
+| No currency / commodity annotation on accounts yet (noted in `features.md` §2 as planned). The tree row has space reserved but renders nothing for it in this slice.                      | domain                                 |
 
 ## 12. Future Considerations
 

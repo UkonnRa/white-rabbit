@@ -6,15 +6,15 @@ import type { AccountRow } from "../models";
 
 function makeRow(overrides: Partial<AccountRow> & { id: string }): AccountRow {
   return {
-    journal_id: "j1",
-    parent_id: null,
+    journalId: "j1",
+    parentId: null,
     type: AccountType.Asset,
     name: "Asset",
     description: "",
     tags: [],
-    created_at: null,
-    last_modified_at: null,
-    archived_at: null,
+    createdAt: null,
+    lastModifiedAt: null,
+    archivedAt: null,
     subRows: [],
     depth: 0,
     ...overrides,
@@ -32,7 +32,12 @@ describe("AccountTable", () => {
 
   it("shows archived badge for archived accounts", () => {
     const data: AccountRow[] = [
-      makeRow({ id: "c1", name: "Bank", parent_id: "p1", archived_at: "2024-01-01" }),
+      makeRow({
+        id: "c1",
+        name: "Bank",
+        parentId: "p1",
+        archivedAt: "2024-01-01",
+      }),
     ];
     const wrapper = mountWithTheme(AccountTable, { props: { data } });
     expect(wrapper.text()).toContain("Archived");
@@ -44,7 +49,7 @@ describe("AccountTable", () => {
         id: "root",
         name: "Asset",
         subRows: [
-          makeRow({ id: "child1", name: "Bank", parent_id: "root", depth: 1 }),
+          makeRow({ id: "child1", name: "Bank", parentId: "root", depth: 1 }),
         ],
       }),
     ];

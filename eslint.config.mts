@@ -24,6 +24,18 @@ export default defineConfig([
   },
   tseslint.configs.recommended,
   {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
     files: ["**/*.vue"],
     extends: [...pluginVue.configs["flat/recommended"]],
     languageOptions: {

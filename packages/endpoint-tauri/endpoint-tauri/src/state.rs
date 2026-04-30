@@ -8,7 +8,7 @@ use domain_database_seaorm::journal::SeaOrmJournalRepository;
 use sea_orm::DatabaseConnection;
 
 pub type JournalRepo = SeaOrmJournalRepository;
-pub type JournalSvc = JournalService<JournalRepo>;
+pub type JournalSvc = JournalService<JournalRepo, AccountRepo>;
 
 pub type AccountRepo = SeaOrmAccountRepository;
 pub type AccountSvc = AccountService<AccountRepo>;
@@ -24,10 +24,11 @@ pub struct AppState {
 impl AppState {
     pub fn new(db: DatabaseConnection) -> Self {
         let journal_repo = Arc::new(SeaOrmJournalRepository);
-        let journal_service = Arc::new(JournalService {
-            repository: Arc::clone(&journal_repo),
-        });
         let account_repo = Arc::new(SeaOrmAccountRepository);
+        let journal_service = Arc::new(JournalService {
+            journal_repo: Arc::clone(&journal_repo),
+            account_repo: Arc::clone(&account_repo),
+        });
         let account_service = Arc::new(AccountService {
             repository: Arc::clone(&account_repo),
         });

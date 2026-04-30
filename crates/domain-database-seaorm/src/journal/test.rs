@@ -14,14 +14,19 @@ use domain::journal::service::JournalService;
 use shared::WriteService;
 
 use super::SeaOrmJournalRepository;
+use crate::account::SeaOrmAccountRepository;
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-async fn new_service() -> (JournalService<SeaOrmJournalRepository>, SeaOrmSession) {
+async fn new_service() -> (
+    JournalService<SeaOrmJournalRepository, SeaOrmAccountRepository>,
+    SeaOrmSession,
+) {
     let db = Database::connect("sqlite::memory:").await.unwrap();
     Migrator::up(&db, None).await.unwrap();
     let service = JournalService {
-        repository: Arc::new(SeaOrmJournalRepository),
+        journal_repo: Arc::new(SeaOrmJournalRepository),
+        account_repo: Arc::new(SeaOrmAccountRepository),
     };
     let sess = SeaOrmSession::new(db);
     (service, sess)
