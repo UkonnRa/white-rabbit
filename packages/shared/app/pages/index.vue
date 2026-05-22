@@ -4,6 +4,9 @@ import type { Journal, JournalFormData } from "../models";
 import JournalCard from "../components/JournalCard.vue";
 import JournalForm from "../components/JournalForm.vue";
 
+const router = useRouter();
+const _navigateTo = navigateTo;
+
 const { data: journals, status, error: queryError, refresh } = useJournals();
 
 const client = useJournalClient();
@@ -93,7 +96,7 @@ async function confirmDelete() {
     <div class="flex items-center justify-between gap-4">
       <h1 class="text-xl font-bold">Journals</h1>
       <UButton @click="showCreateDialog = true">
-        <UIcon icon="lucide:plus" class="mr-1" />
+        <UIcon name="lucide:plus" class="mr-1" />
         New Journal
       </UButton>
     </div>
@@ -123,14 +126,14 @@ async function confirmDelete() {
       class="flex flex-col items-center justify-center py-20 text-center"
     >
       <UIcon
-        icon="lucide:book-open"
+        name="lucide:book-open"
         class="text-(--ui-text-dimmed)/40 mb-4 size-12"
       />
       <p class="text-(--ui-text-dimmed) text-sm mb-4">
         No journals yet. Create your first ledger to start tracking finances.
       </p>
       <UButton @click="showCreateDialog = true">
-        <UIcon icon="lucide:plus" class="mr-1" />
+        <UIcon name="lucide:plus" class="mr-1" />
         Create Journal
       </UButton>
     </div>
@@ -147,7 +150,7 @@ async function confirmDelete() {
         v-for="journal in filteredJournals"
         :key="journal.id"
         :journal="journal"
-        @click="navigateTo(`/journals/${journal.id}`)"
+        @click="router.push(`/journals/${journal.id}`)"
         @edit="openEdit(journal)"
         @delete="openDelete(journal)"
       />

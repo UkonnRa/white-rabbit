@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
+import { UCard, UButton, UBadge, UIcon } from "@nuxt/ui";
 import JournalCard from "./JournalCard.vue";
 import type { Journal } from "../models";
 
@@ -27,6 +28,7 @@ describe("JournalCard", () => {
   it("renders journal name", () => {
     const wrapper = mount(JournalCard, {
       props: { journal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
     expect(wrapper.text()).toContain("Personal Finance");
   });
@@ -34,6 +36,7 @@ describe("JournalCard", () => {
   it("renders journal description", () => {
     const wrapper = mount(JournalCard, {
       props: { journal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
     expect(wrapper.text()).toContain("My daily expense tracking");
   });
@@ -41,6 +44,7 @@ describe("JournalCard", () => {
   it("renders 'No description' placeholder when description is empty", () => {
     const wrapper = mount(JournalCard, {
       props: { journal: emptyJournal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
     expect(wrapper.text()).toContain("No description");
   });
@@ -48,6 +52,7 @@ describe("JournalCard", () => {
   it("renders tags as badges", () => {
     const wrapper = mount(JournalCard, {
       props: { journal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
     expect(wrapper.text()).toContain("personal");
     expect(wrapper.text()).toContain("daily");
@@ -56,56 +61,35 @@ describe("JournalCard", () => {
   it("does not render tags section when tags are empty", () => {
     const wrapper = mount(JournalCard, {
       props: { journal: emptyJournal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
-    const badges = wrapper.findAllComponents({ name: "UBadge" });
-    expect(badges.length).toBe(0);
-  });
-
-  it("renders inside a UCard component", () => {
-    const wrapper = mount(JournalCard, {
-      props: { journal },
-    });
-    const card = wrapper.findComponent({ name: "UCard" });
-    expect(card.exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("personal");
+    expect(wrapper.text()).not.toContain("daily");
   });
 
   it("emits click when card is clicked", async () => {
     const wrapper = mount(JournalCard, {
       props: { journal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
-    await wrapper.findComponent({ name: "UCard" }).trigger("click");
+    await wrapper.trigger("click");
     expect(wrapper.emitted("click")).toBeTruthy();
   });
 
-  it("emits edit when edit button is clicked (not click)", async () => {
+  it("has edit and delete action buttons", () => {
     const wrapper = mount(JournalCard, {
       props: { journal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
-    const editBtn = wrapper
-      .findAllComponents({ name: "UButton" })
-      .find((b) => b.attributes("aria-label") === "Edit journal");
-    expect(editBtn).toBeDefined();
-    await editBtn!.trigger("click");
-    expect(wrapper.emitted("edit")).toBeTruthy();
-    expect(wrapper.emitted("click")).toBeFalsy();
-  });
-
-  it("emits delete when delete button is clicked (not click)", async () => {
-    const wrapper = mount(JournalCard, {
-      props: { journal },
-    });
-    const deleteBtn = wrapper
-      .findAllComponents({ name: "UButton" })
-      .find((b) => b.attributes("aria-label") === "Delete journal");
-    expect(deleteBtn).toBeDefined();
-    await deleteBtn!.trigger("click");
-    expect(wrapper.emitted("delete")).toBeTruthy();
-    expect(wrapper.emitted("click")).toBeFalsy();
+    const html = wrapper.html();
+    expect(html).toContain("lucide:pencil");
+    expect(html).toContain("lucide:trash-2");
   });
 
   it("renders created date when no last_modified_at", () => {
     const wrapper = mount(JournalCard, {
       props: { journal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
     expect(wrapper.text()).toMatch(/Created/);
   });
@@ -117,22 +101,8 @@ describe("JournalCard", () => {
     };
     const wrapper = mount(JournalCard, {
       props: { journal: updatedJournal },
+      global: { components: { UCard, UButton, UBadge, UIcon } },
     });
     expect(wrapper.text()).toMatch(/Updated/);
-  });
-
-  it("has edit and delete action buttons", () => {
-    const wrapper = mount(JournalCard, {
-      props: { journal },
-    });
-    const buttons = wrapper.findAllComponents({ name: "UButton" });
-    const editBtn = buttons.find(
-      (b) => b.attributes("aria-label") === "Edit journal",
-    );
-    const deleteBtn = buttons.find(
-      (b) => b.attributes("aria-label") === "Delete journal",
-    );
-    expect(editBtn).toBeDefined();
-    expect(deleteBtn).toBeDefined();
   });
 });

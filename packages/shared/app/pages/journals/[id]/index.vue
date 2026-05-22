@@ -5,6 +5,9 @@ const { journal, journalId } = useCurrentJournal();
 const { data: accounts } = useAccounts(journalId);
 
 const accountCount = computed(() => accounts.value?.length ?? 0);
+
+const router = useRouter();
+const _navigateTo = navigateTo;
 </script>
 
 <template>
@@ -32,11 +35,11 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <UCard
         class="cursor-pointer hover:border-(--ui-primary) transition-colors"
-        @click="navigateTo(`/journals/${journalId}/accounts`)"
+        @click="router.push(`/journals/${journalId}/accounts`)"
       >
         <div class="flex items-center gap-3">
           <UIcon
-            icon="lucide:folder-tree"
+            name="lucide:folder-tree"
             class="text-(--ui-primary) shrink-0 size-5"
           />
           <div>
@@ -51,7 +54,7 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
       <UCard class="opacity-40 select-none">
         <div class="flex items-center gap-3">
           <UIcon
-            icon="lucide:list"
+            name="lucide:list"
             class="text-(--ui-text-dimmed)/40 shrink-0 size-5"
           />
           <div>
@@ -64,7 +67,7 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
       <UCard class="opacity-40 select-none">
         <div class="flex items-center gap-3">
           <UIcon
-            icon="lucide:bar-chart-3"
+            name="lucide:bar-chart-3"
             class="text-(--ui-text-dimmed)/40 shrink-0 size-5"
           />
           <div>
@@ -77,7 +80,7 @@ const accountCount = computed(() => accounts.value?.length ?? 0);
       <UCard class="opacity-40 select-none">
         <div class="flex items-center gap-3">
           <UIcon
-            icon="lucide:settings"
+            name="lucide:settings"
             class="text-(--ui-text-dimmed)/40 shrink-0 size-5"
           />
           <div>

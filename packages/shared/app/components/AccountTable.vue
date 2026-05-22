@@ -20,6 +20,14 @@ const emit = defineEmits<{
 
 const expanded = ref<ExpandedState>({});
 
+function onExpandedChange(updater: unknown) {
+  if (typeof updater === "function") {
+    expanded.value = updater(expanded.value);
+  } else {
+    expanded.value = updater as ExpandedState;
+  }
+}
+
 const columns: ColumnDef<AccountRow, unknown>[] = [
   {
     id: "name",
@@ -74,7 +82,7 @@ function getSubRows(row: AccountRow): AccountRow[] {
     :get-sub-rows="getSubRows"
     :enable-expanding="true"
     :expanded="expanded"
-    @update:expanded="expanded = $event"
+    @update:expanded="onExpandedChange"
   >
     <template #empty>
       <div class="text-center py-8 text-(--ui-text-dimmed)">

@@ -42,7 +42,7 @@ const isExpanded = computed(() => {
     />
     <span v-else class="w-6 inline-block" />
 
-    <UIcon :icon="TYPE_ICONS[account.type] ?? 'lucide:folder'" size="sm" />
+    <UIcon :name="TYPE_ICONS[account.type] ?? 'lucide:folder'" size="sm" />
 
     <span
       :class="account.parentId === null ? 'font-semibold' : ''"

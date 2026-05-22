@@ -86,9 +86,10 @@ describe("buildAccountRows", () => {
     ];
     const rows = buildAccountRows(accounts);
     expect(rows).toHaveLength(1);
-    expect(rows[0].subRows).toHaveLength(2);
-    expect(rows[0].subRows[0].name).toBe("Bank");
-    expect(rows[0].subRows[1].name).toBe("Cash");
+    const root = rows[0]!;
+    expect(root.subRows).toHaveLength(2);
+    expect(root.subRows[0]!.name).toBe("Bank");
+    expect(root.subRows[1]!.name).toBe("Cash");
   });
 
   it("computes depth correctly", () => {
@@ -113,9 +114,9 @@ describe("buildAccountRows", () => {
       }),
     ];
     const rows = buildAccountRows(accounts);
-    expect(rows[0].depth).toBe(0);
-    expect(rows[0].subRows[0].depth).toBe(1);
-    expect(rows[0].subRows[0].subRows[0].depth).toBe(2);
+    expect(rows[0]!.depth).toBe(0);
+    expect(rows[0]!.subRows[0]!.depth).toBe(1);
+    expect(rows[0]!.subRows[0]!.subRows[0]!.depth).toBe(2);
   });
 
   it("handles empty account list", () => {
