@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mountWithTheme } from "../test-utils-mount";
+import { mount } from "@vue/test-utils";
 import JournalCard from "./JournalCard.vue";
 import type { Journal } from "../models";
 
@@ -25,28 +25,28 @@ const emptyJournal: Journal = {
 
 describe("JournalCard", () => {
   it("renders journal name", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
     expect(wrapper.text()).toContain("Personal Finance");
   });
 
   it("renders journal description", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
     expect(wrapper.text()).toContain("My daily expense tracking");
   });
 
   it("renders 'No description' placeholder when description is empty", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal: emptyJournal },
     });
     expect(wrapper.text()).toContain("No description");
   });
 
-  it("renders tags as chips", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+  it("renders tags as badges", () => {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
     expect(wrapper.text()).toContain("personal");
@@ -54,49 +54,48 @@ describe("JournalCard", () => {
   });
 
   it("does not render tags section when tags are empty", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal: emptyJournal },
     });
-    const chips = wrapper.findAllComponents({ name: "AppChip" });
-    expect(chips.length).toBe(0);
+    const badges = wrapper.findAllComponents({ name: "UBadge" });
+    expect(badges.length).toBe(0);
   });
 
-  it("renders inside an AppCard component", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+  it("renders inside a UCard component", () => {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
-    const card = wrapper.findComponent({ name: "AppCard" });
+    const card = wrapper.findComponent({ name: "UCard" });
     expect(card.exists()).toBe(true);
   });
 
   it("emits click when card is clicked", async () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
-    await wrapper.findComponent({ name: "AppCard" }).trigger("click");
+    await wrapper.findComponent({ name: "UCard" }).trigger("click");
     expect(wrapper.emitted("click")).toBeTruthy();
   });
 
   it("emits edit when edit button is clicked (not click)", async () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
     const editBtn = wrapper
-      .findAllComponents({ name: "AppButton" })
+      .findAllComponents({ name: "UButton" })
       .find((b) => b.attributes("aria-label") === "Edit journal");
     expect(editBtn).toBeDefined();
     await editBtn!.trigger("click");
     expect(wrapper.emitted("edit")).toBeTruthy();
-    // click should NOT have propagated
     expect(wrapper.emitted("click")).toBeFalsy();
   });
 
   it("emits delete when delete button is clicked (not click)", async () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
     const deleteBtn = wrapper
-      .findAllComponents({ name: "AppButton" })
+      .findAllComponents({ name: "UButton" })
       .find((b) => b.attributes("aria-label") === "Delete journal");
     expect(deleteBtn).toBeDefined();
     await deleteBtn!.trigger("click");
@@ -105,7 +104,7 @@ describe("JournalCard", () => {
   });
 
   it("renders created date when no last_modified_at", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
     expect(wrapper.text()).toMatch(/Created/);
@@ -116,17 +115,17 @@ describe("JournalCard", () => {
       ...journal,
       last_modified_at: "2026-04-10T00:00:00Z",
     };
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal: updatedJournal },
     });
     expect(wrapper.text()).toMatch(/Updated/);
   });
 
   it("has edit and delete action buttons", () => {
-    const wrapper = mountWithTheme(JournalCard, {
+    const wrapper = mount(JournalCard, {
       props: { journal },
     });
-    const buttons = wrapper.findAllComponents({ name: "AppButton" });
+    const buttons = wrapper.findAllComponents({ name: "UButton" });
     const editBtn = buttons.find(
       (b) => b.attributes("aria-label") === "Edit journal",
     );

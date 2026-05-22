@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { AccountRow } from "../../models";
-import AppChip from "../ui/AppChip.vue";
 
 defineProps<{
   account: AccountRow;
@@ -9,8 +8,8 @@ defineProps<{
 
 <template>
   <div v-if="account.tags.length" class="flex flex-wrap gap-1">
-    <AppChip v-for="tag in account.tags" :key="tag" variant="tonal" size="sm">
+    <UBadge v-for="tag in account.tags" :key="tag" variant="soft" size="sm">
       {{ tag }}
-    </AppChip>
+    </UBadge>
   </div>
 </template>

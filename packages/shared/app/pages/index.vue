@@ -1,14 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import type { Journal, JournalFormData } from "../models";
-import AppButton from "../components/ui/AppButton.vue";
-import AppIcon from "../components/ui/AppIcon.vue";
-import AppInput from "../components/ui/AppInput.vue";
-import AppDialog from "../components/ui/AppDialog.vue";
 import JournalCard from "../components/JournalCard.vue";
 import JournalForm from "../components/JournalForm.vue";
-
-// ── Data ─────���──────────────────────────────────────────────────────────────
 
 const { data: journals, status, error: queryError, refresh } = useJournals();
 
@@ -17,8 +11,6 @@ const mutationError = ref<string | null>(null);
 const displayError = computed(
   () => mutationError.value ?? queryError.value?.message ?? null,
 );
-
-// ── Search filter ───────��───────────────────────────────────────────────────
 
 const searchQuery = ref("");
 const showSearch = computed(() => (journals.value?.length ?? 0) >= 5);
@@ -34,8 +26,6 @@ const filteredJournals = computed(() => {
   );
 });
 
-// ── Create dialog ──────────��────────────────────────────────────────────────
-
 const showCreateDialog = ref(false);
 
 async function handleCreate(data: JournalFormData) {
@@ -48,8 +38,6 @@ async function handleCreate(data: JournalFormData) {
     mutationError.value = String(e);
   }
 }
-
-// ── Edit dialog ─────────────────────────────────────────────────────────────
 
 const showEditDialog = ref(false);
 const editingJournal = ref<Journal | null>(null);
@@ -71,8 +59,6 @@ async function handleUpdate(data: JournalFormData) {
     mutationError.value = String(e);
   }
 }
-
-// ── Delete confirmation ──────���──────────────────���───────────────────────────
 
 const showDeleteDialog = ref(false);
 const deletingJournal = ref<Journal | null>(null);
@@ -104,66 +90,58 @@ async function confirmDelete() {
 
 <template>
   <div class="flex flex-col gap-6">
-    <!-- Page header -->
     <div class="flex items-center justify-between gap-4">
-      <h1 class="text-xl font-bold text-on-background">Journals</h1>
-      <AppButton variant="solid" @click="showCreateDialog = true">
-        <AppIcon icon="lucide:plus" size="sm" class="mr-1" />
+      <h1 class="text-xl font-bold">Journals</h1>
+      <UButton @click="showCreateDialog = true">
+        <UIcon icon="lucide:plus" class="mr-1" />
         New Journal
-      </AppButton>
+      </UButton>
     </div>
 
-    <!-- Search (visible when >= 5 journals) -->
-    <AppInput
+    <UInput
       v-if="showSearch"
       v-model="searchQuery"
-      placeholder="Search journals by name or tag…"
+      placeholder="Search journals by name or tag..."
     />
 
-    <!-- Error banner -->
     <div
       v-if="displayError"
-      class="rounded-lg border border-error bg-error/10 text-error px-4 py-3 text-sm"
+      class="rounded-lg border border-(--ui-error) bg-(--ui-error)/10 text-(--ui-error) px-4 py-3 text-sm"
     >
       {{ displayError }}
     </div>
 
-    <!-- Loading -->
     <div
       v-if="status === 'pending'"
-      class="text-center py-16 text-on-surface-variant"
+      class="text-center py-16 text-(--ui-text-dimmed)"
     >
-      Loading…
+      Loading...
     </div>
 
-    <!-- Empty state -->
     <div
       v-else-if="!journals?.length"
       class="flex flex-col items-center justify-center py-20 text-center"
     >
-      <AppIcon
+      <UIcon
         icon="lucide:book-open"
-        size="lg"
-        class="text-on-surface-variant/40 mb-4 !size-12"
+        class="text-(--ui-text-dimmed)/40 mb-4 size-12"
       />
-      <p class="text-on-surface-variant text-sm mb-4">
+      <p class="text-(--ui-text-dimmed) text-sm mb-4">
         No journals yet. Create your first ledger to start tracking finances.
       </p>
-      <AppButton variant="solid" @click="showCreateDialog = true">
-        <AppIcon icon="lucide:plus" size="sm" class="mr-1" />
+      <UButton @click="showCreateDialog = true">
+        <UIcon icon="lucide:plus" class="mr-1" />
         Create Journal
-      </AppButton>
+      </UButton>
     </div>
 
-    <!-- No search results -->
     <div
       v-else-if="searchQuery && !filteredJournals.length"
-      class="text-center py-12 text-on-surface-variant text-sm"
+      class="text-center py-12 text-(--ui-text-dimmed) text-sm"
     >
       No journals match your search.
     </div>
 
-    <!-- Journal card grid -->
     <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <JournalCard
         v-for="journal in filteredJournals"
@@ -175,64 +153,60 @@ async function confirmDelete() {
       />
     </div>
 
-    <!-- Create dialog -->
-    <AppDialog v-model:open="showCreateDialog" size="md">
-      <template #title>New Journal</template>
-      <JournalForm @submit="handleCreate" @cancel="showCreateDialog = false" />
-    </AppDialog>
-
-    <!-- Edit dialog -->
-    <AppDialog v-model:open="showEditDialog" size="md">
-      <template #title>Edit Journal</template>
-      <JournalForm
-        v-if="editingJournal"
-        :initial="{
-          name: editingJournal.name,
-          description: editingJournal.description,
-          tags: editingJournal.tags,
-        }"
-        @submit="handleUpdate"
-        @cancel="showEditDialog = false"
-      />
-    </AppDialog>
-
-    <!-- Delete confirmation dialog -->
-    <AppDialog v-model:open="showDeleteDialog" size="sm">
-      <template #title>Delete Journal</template>
-      <template #description>
-        Are you sure you want to delete
-        <strong>{{ deletingJournal?.name }}</strong
-        >? All accounts and records within this journal will be permanently
-        removed. This action cannot be undone.
+    <UModal v-model:open="showCreateDialog" title="New Journal">
+      <template #body>
+        <JournalForm @submit="handleCreate" @cancel="showCreateDialog = false" />
       </template>
-      <div class="flex flex-col gap-4 pt-4">
-        <div>
-          <label for="delete-confirm" class="block text-sm mb-1">
-            Please input the exact name '<strong>{{
-              deletingJournal?.name
-            }}</strong
-            >' to confirm.
-          </label>
-          <AppInput
-            id="delete-confirm"
-            v-model="deleteConfirmName"
-            :placeholder="deletingJournal?.name ?? ''"
-          />
+    </UModal>
+
+    <UModal v-model:open="showEditDialog" title="Edit Journal">
+      <template #body>
+        <JournalForm
+          v-if="editingJournal"
+          :initial="{
+            name: editingJournal.name,
+            description: editingJournal.description,
+            tags: editingJournal.tags,
+          }"
+          @submit="handleUpdate"
+          @cancel="showEditDialog = false"
+        />
+      </template>
+    </UModal>
+
+    <UModal v-model:open="showDeleteDialog" title="Delete Journal">
+      <template #body>
+        <p class="text-sm mb-4">
+          Are you sure you want to delete
+          <strong>{{ deletingJournal?.name }}</strong
+          >? All accounts and records within this journal will be permanently
+          removed. This action cannot be undone.
+        </p>
+        <div class="flex flex-col gap-4">
+          <div>
+            <label for="delete-confirm" class="block text-sm mb-1">
+              Type <strong>{{ deletingJournal?.name }}</strong> to confirm:
+            </label>
+            <UInput
+              id="delete-confirm"
+              v-model="deleteConfirmName"
+              :placeholder="deletingJournal?.name ?? ''"
+            />
+          </div>
+          <div class="flex justify-end gap-2">
+            <UButton variant="outline" @click="showDeleteDialog = false">
+              Cancel
+            </UButton>
+            <UButton
+              color="error"
+              :disabled="!deleteEnabled"
+              @click="confirmDelete"
+            >
+              Delete
+            </UButton>
+          </div>
         </div>
-        <div class="flex justify-end gap-2">
-          <AppButton variant="outlined" @click="showDeleteDialog = false">
-            Cancel
-          </AppButton>
-          <AppButton
-            variant="solid"
-            class="bg-error text-on-error"
-            :disabled="!deleteEnabled"
-            @click="confirmDelete"
-          >
-            Delete
-          </AppButton>
-        </div>
-      </div>
-    </AppDialog>
+      </template>
+    </UModal>
   </div>
 </template>

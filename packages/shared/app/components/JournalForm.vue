@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import type { JournalFormData } from "../models";
-import AppInput from "./ui/AppInput.vue";
-import AppTextarea from "./ui/AppTextarea.vue";
-import AppButton from "./ui/AppButton.vue";
-import AppTagInput from "./ui/AppTagInput.vue";
 
 const props = defineProps<{
   initial?: { name: string; description: string; tags: string[] };
@@ -18,6 +14,7 @@ const emit = defineEmits<{
 const name = ref(props.initial?.name ?? "");
 const description = ref(props.initial?.description ?? "");
 const tags = ref<string[]>(props.initial?.tags ?? []);
+const tagInput = ref("");
 
 watch(
   () => props.initial,
@@ -27,6 +24,18 @@ watch(
     tags.value = val?.tags ?? [];
   },
 );
+
+function addTag() {
+  const t = tagInput.value.trim();
+  if (t && !tags.value.includes(t)) {
+    tags.value.push(t);
+  }
+  tagInput.value = "";
+}
+
+function removeTag(tag: string) {
+  tags.value = tags.value.filter((t) => t !== tag);
+}
 
 function handleSubmit() {
   emit("submit", {
@@ -43,7 +52,7 @@ function handleSubmit() {
       <label for="journal-name" class="block text-sm font-medium mb-1"
         >Name</label
       >
-      <AppInput
+      <UInput
         id="journal-name"
         v-model="name"
         placeholder="Journal name"
@@ -54,7 +63,7 @@ function handleSubmit() {
       <label for="journal-description" class="block text-sm font-medium mb-1"
         >Description</label
       >
-      <AppTextarea
+      <UTextarea
         id="journal-description"
         v-model="description"
         placeholder="Optional description"
@@ -63,15 +72,30 @@ function handleSubmit() {
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Tags</label>
-      <AppTagInput v-model="tags" placeholder="Add tag…" />
+      <div class="flex flex-wrap gap-1 mb-2">
+        <UBadge
+          v-for="tag in tags"
+          :key="tag"
+          variant="soft"
+          size="sm"
+          class="cursor-pointer"
+          @click="removeTag(tag)"
+        >
+          {{ tag }} &times;
+        </UBadge>
+      </div>
+      <form class="flex gap-2" @submit.prevent="addTag">
+        <UInput v-model="tagInput" placeholder="Add tag..." size="sm" />
+        <UButton type="submit" size="sm" variant="outline">Add</UButton>
+      </form>
     </div>
     <div class="flex justify-end gap-2 pt-2">
-      <AppButton type="button" variant="outlined" @click="$emit('cancel')">
+      <UButton type="button" variant="outline" @click="$emit('cancel')">
         Cancel
-      </AppButton>
-      <AppButton type="submit" variant="solid">
+      </UButton>
+      <UButton type="submit">
         {{ initial ? "Update" : "Create" }}
-      </AppButton>
+      </UButton>
     </div>
   </form>
 </template>

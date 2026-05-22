@@ -2,8 +2,6 @@
 import { computed } from "vue";
 import type { ExpandedState, Row } from "@tanstack/vue-table";
 import type { AccountRow } from "../../models";
-import AppButton from "../ui/AppButton.vue";
-import AppIcon from "../ui/AppIcon.vue";
 
 const TYPE_ICONS: Record<string, string> = {
   Asset: "lucide:landmark",
@@ -34,28 +32,20 @@ const isExpanded = computed(() => {
 
 <template>
   <div class="flex items-center gap-2">
-    <AppButton
+    <UButton
       v-if="canExpand"
       variant="ghost"
       size="sm"
+      :icon="isExpanded ? 'lucide:chevron-down' : 'lucide:chevron-right'"
       :aria-label="account.name"
       @click="emit('toggleExpand', row.id)"
-    >
-      <AppIcon
-        :icon="isExpanded ? 'lucide:chevron-down' : 'lucide:chevron-right'"
-        size="sm"
-      />
-    </AppButton>
+    />
     <span v-else class="w-6 inline-block" />
 
-    <AppIcon :icon="TYPE_ICONS[account.type] ?? 'lucide:folder'" size="sm" />
+    <UIcon :icon="TYPE_ICONS[account.type] ?? 'lucide:folder'" size="sm" />
 
     <span
-      :class="
-        account.parentId === null
-          ? 'font-semibold text-on-surface'
-          : 'text-on-surface'
-      "
+      :class="account.parentId === null ? 'font-semibold' : ''"
       :style="{ paddingLeft: `${account.depth * 12}px` }"
     >
       {{ account.name }}
@@ -63,7 +53,7 @@ const isExpanded = computed(() => {
 
     <span
       v-if="account.archivedAt"
-      class="text-xs px-1.5 py-0.5 rounded bg-surface-variant text-on-surface-variant ml-2"
+      class="text-xs px-1.5 py-0.5 rounded bg-(--ui-bg-elevated) text-(--ui-text-dimmed) ml-2"
     >
       Archived
     </span>

@@ -1,11 +1,5 @@
 <template>
-  <TooltipProvider>
-    <NuxtLayout>
-      <NuxtPage />
-    </NuxtLayout>
-  </TooltipProvider>
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
 </template>
-
-<script setup lang="ts">
-import { TooltipProvider } from "reka-ui";
-</script>

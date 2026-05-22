@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import type { Account, AccountFormData, AccountType } from "../../../models";
-import AppInput from "../../../components/ui/AppInput.vue";
-import AppDialog from "../../../components/ui/AppDialog.vue";
 import AccountTable from "../../../components/AccountTable.vue";
 import AccountForm from "../../../components/AccountForm.vue";
 import AccountArchiveConfirm from "../../../components/AccountArchiveConfirm.vue";
@@ -172,10 +170,10 @@ async function confirmDelete() {
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex items-center justify-between gap-4">
-      <h1 class="text-xl font-bold text-on-background">Accounts</h1>
+      <h1 class="text-xl font-bold">Accounts</h1>
       <div class="flex items-center gap-3">
         <label
-          class="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none"
+          class="flex items-center gap-2 text-sm text-(--ui-text-dimmed) cursor-pointer select-none"
         >
           <input
             type="checkbox"
@@ -187,23 +185,23 @@ async function confirmDelete() {
       </div>
     </div>
 
-    <AppInput
+    <UInput
       v-model="searchQuery"
-      placeholder="Search accounts by name or tag…"
+      placeholder="Search accounts by name or tag..."
     />
 
     <div
       v-if="mutationError"
-      class="rounded-lg border border-error bg-error/10 text-error px-4 py-3 text-sm"
+      class="rounded-lg border border-(--ui-error) bg-(--ui-error)/10 text-(--ui-error) px-4 py-3 text-sm"
     >
       {{ mutationError }}
     </div>
 
     <div
       v-if="status === 'pending'"
-      class="text-center py-16 text-on-surface-variant"
+      class="text-center py-16 text-(--ui-text-dimmed)"
     >
-      Loading…
+      Loading...
     </div>
 
     <AccountTable
@@ -215,50 +213,54 @@ async function confirmDelete() {
       @delete="openDelete"
     />
 
-    <AppDialog v-model:open="showCreateDialog" size="md">
-      <template #title>Add Account</template>
-      <AccountForm
-        :parent-path="creatingParentPath"
-        @submit="handleCreate"
-        @cancel="showCreateDialog = false"
-      />
-    </AppDialog>
+    <UModal v-model:open="showCreateDialog" title="Add Account">
+      <template #body>
+        <AccountForm
+          :parent-path="creatingParentPath"
+          @submit="handleCreate"
+          @cancel="showCreateDialog = false"
+        />
+      </template>
+    </UModal>
 
-    <AppDialog v-model:open="showEditDialog" size="md">
-      <template #title>Edit Account</template>
-      <AccountForm
-        v-if="editingAccount"
-        :initial="{
-          name: editingAccount.name,
-          description: editingAccount.description,
-          tags: editingAccount.tags,
-        }"
-        :parent-path="getParentPath(editingAccount.parentId ?? '')"
-        @submit="handleUpdate"
-        @cancel="showEditDialog = false"
-      />
-    </AppDialog>
+    <UModal v-model:open="showEditDialog" title="Edit Account">
+      <template #body>
+        <AccountForm
+          v-if="editingAccount"
+          :initial="{
+            name: editingAccount.name,
+            description: editingAccount.description,
+            tags: editingAccount.tags,
+          }"
+          :parent-path="getParentPath(editingAccount.parentId ?? '')"
+          @submit="handleUpdate"
+          @cancel="showEditDialog = false"
+        />
+      </template>
+    </UModal>
 
-    <AppDialog v-model:open="showArchiveDialog" size="sm">
-      <template #title>Archive Account</template>
-      <AccountArchiveConfirm
-        v-if="archivingAccount"
-        :account="archivingAccount"
-        :cascade-count="archiveCascadeCount"
-        @confirm="confirmArchive"
-        @cancel="showArchiveDialog = false"
-      />
-    </AppDialog>
+    <UModal v-model:open="showArchiveDialog" title="Archive Account">
+      <template #body>
+        <AccountArchiveConfirm
+          v-if="archivingAccount"
+          :account="archivingAccount"
+          :cascade-count="archiveCascadeCount"
+          @confirm="confirmArchive"
+          @cancel="showArchiveDialog = false"
+        />
+      </template>
+    </UModal>
 
-    <AppDialog v-model:open="showDeleteDialog" size="sm">
-      <template #title>Delete Account</template>
-      <AccountDeleteConfirm
-        v-if="deletingAccount"
-        :account="deletingAccount"
-        :cascade-count="deleteCascadeCount"
-        @confirm="confirmDelete"
-        @cancel="showDeleteDialog = false"
-      />
-    </AppDialog>
+    <UModal v-model:open="showDeleteDialog" title="Delete Account">
+      <template #body>
+        <AccountDeleteConfirm
+          v-if="deletingAccount"
+          :account="deletingAccount"
+          :cascade-count="deleteCascadeCount"
+          @confirm="confirmDelete"
+          @cancel="showDeleteDialog = false"
+        />
+      </template>
+    </UModal>
   </div>
 </template>

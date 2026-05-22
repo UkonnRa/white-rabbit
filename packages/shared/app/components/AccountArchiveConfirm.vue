@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Account } from "../models";
-import AppButton from "./ui/AppButton.vue";
 
 defineProps<{
   account: Account;
@@ -15,19 +14,18 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex flex-col gap-4">
-    <p class="text-sm text-on-surface">
-      Archive account <strong>{{ account.name }}</strong
-      >?
+    <p class="text-sm">
+      Archive account <strong>{{ account.name }}</strong>?
     </p>
-    <p class="text-sm text-on-surface-variant">
+    <p class="text-sm text-(--ui-text-dimmed)">
       This will also archive
       <strong>{{ cascadeCount }}</strong> descendant
       {{ cascadeCount === 1 ? "account" : "accounts" }}. Archived accounts
       cannot receive new records, but their history is preserved.
     </p>
     <div class="flex justify-end gap-2 pt-2">
-      <AppButton variant="outlined" @click="emit('cancel')">Cancel</AppButton>
-      <AppButton variant="solid" @click="emit('confirm')">Archive</AppButton>
+      <UButton variant="outline" @click="emit('cancel')">Cancel</UButton>
+      <UButton @click="emit('confirm')">Archive</UButton>
     </div>
   </div>
 </template>

@@ -2,7 +2,6 @@
 import { h, ref } from "vue";
 import type { ExpandedState } from "@tanstack/vue-table";
 import type { AccountRow, Account, AccountType } from "../models";
-import AppDataTable from "./ui/AppDataTable.vue";
 import AccountNameCell from "./account-table/AccountNameCell.vue";
 import AccountTagsCell from "./account-table/AccountTagsCell.vue";
 import AccountActionsCell from "./account-table/AccountActionsCell.vue";
@@ -69,7 +68,7 @@ function getSubRows(row: AccountRow): AccountRow[] {
 </script>
 
 <template>
-  <AppDataTable
+  <UTable
     :data="data"
     :columns="columns"
     :get-sub-rows="getSubRows"
@@ -78,9 +77,9 @@ function getSubRows(row: AccountRow): AccountRow[] {
     @update:expanded="expanded = $event"
   >
     <template #empty>
-      <div class="text-center py-8 text-on-surface-variant">
+      <div class="text-center py-8 text-(--ui-text-dimmed)">
         No accounts found. Create one with the [+] button on a root account.
       </div>
     </template>
-  </AppDataTable>
+  </UTable>
 </template>
