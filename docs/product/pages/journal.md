@@ -281,8 +281,8 @@ filterable table. This is the primary data surface of the dashboard.
 | Payee       | `Record.payee`                | Shown as subtext under description when non-empty.                                                                                  |
 | Postings    | `Record.items` (Transactions) | Each posting on its own line: `account_name` + `amount`. Account names are indented with `·`. Validations render with a `⇔` marker. |
 | Amount      | Derived (total of postings)   | Not a separate column; each posting shows its own amount.                                                                           |
-| Tags        | `Record.tags`                 | `AppChip` components. Hidden column if no records have tags.                                                                        |
-| Actions     | —                             | `[✎]` edit, `[🗑]` delete.                                                                                                          |
+| Tags        | `Record.tags`                 | `UChip` components. Hidden column if no records have tags. |
+| Actions     | —                             | `[✎]` edit, `[🗑]` delete.                               |
 
 ### 6.3 Row Design
 
@@ -505,13 +505,13 @@ balance validation.
 | Field        | Control                 | Domain input                 | Validation                                |
 | ------------ | ----------------------- | ---------------------------- | ----------------------------------------- |
 | Date         | Date picker             | `RecordInput.date`           | Required, defaults to today               |
-| Description  | `AppInput`              | `RecordInput.description`    | Required (NonEmpty in domain)             |
-| Payee        | `AppInput`              | `RecordInput.payee`          | Optional                                  |
-| Tags         | `AppTagInput`           | `RecordInput.tags`           | Optional                                  |
+| Description  | `UInput`                | `RecordInput.description`    | Required (NonEmpty in domain)             |
+| Payee        | `UInput`                | `RecordInput.payee`          | Optional                                  |
+| Tags         | `UChip`                 | `RecordInput.tags`           | Optional                                  |
 | Postings (N) | Dynamic list            | `RecordInput.items`          | At least 2; balanced sum; all same kind   |
 | · Account    | Autocomplete/search     | `RecordItemInput.account_id` | Must belong to this journal; not archived |
-| · Amount     | `AppInput`              | `RecordItemInput.amount`     | Format: `number unit` (e.g., `42.50 USD`) |
-| · Price (@)  | `AppInput` (collapsed)  | `RecordItemInput.price`      | Same format as amount; optional           |
+| · Amount     | `UInput`                | `RecordItemInput.amount`     | Format: `number unit` (e.g., `42.50 USD`) |
+| · Price (@)  | `UInput` (collapsed)    | `RecordItemInput.price`      | Same format as amount; optional           |
 | · Cost ({})  | Multi-input (collapsed) | `RecordItemInput.cost`       | Price/date/reference; optional            |
 
 ### 8.3 Posting Lines
@@ -570,9 +570,9 @@ warn about mixed commodities.
 
 ### 10.1 Shared Project-Level Components
 
-All primitives exist under `app/components/ui/` (`AppButton`, `AppIcon`,
-`AppChip`, `AppInput`, `AppTextarea`, `AppTagInput`, `AppDialog`,
-`AppCard`, `AppTooltip`, `AppMenu`). **No new shared components are
+Nuxt UI primitives used (`UButton`, `UIcon`, `UChip`, `UInput`,
+`UTextarea`, `UModal`, `UCard`, `UTooltip`). **No new shared
+components are needed for this page.**
 needed.**
 
 ### 10.2 Page-Internal Components
@@ -617,7 +617,7 @@ Route:      /journals/:id
 Layout:     journal
 Data:       useCurrentJournal()              → Journal (loaded by layout)
             useAccounts(journalId)            → AccountClient.list({ journalId })
-            useRecords(journalId, filters)    → RecordClient.list(params)
+            useRecords(journalId, filters)    → RecordClient.list({ journalId, filters })
 Mutations:  RecordClient.create / update / delete / batch → refresh()
             AccountClient.create (from dashboard [+ Add account]) → refreshAccounts()
 ```

@@ -1,10 +1,13 @@
-# Accounts Page + Journal Dashboard Slice
+# Accounts Page + Journal Dashboard Slice (ARCHIVED)
 
-Implementation plan for shipping the Accounts page (`/journals/:id/accounts`)
-and a minimal Journal Dashboard (`/journals/:id`) as a single development slice.
-
-Product specs: `docs/product/pages/accounts.md`, `docs/product/pages/journal.md`.
-Feature spec: `docs/product/features.md`.
+> **This spec has been superseded.** The project has migrated from a
+> custom headless component system (AppButton, AppInput, etc.) to Nuxt UI.
+> See `docs/adr/0008-nuxt-ui-migration.md`. The content below is retained
+> for historical reference only; component names and architecture no longer
+> apply.
+>
+> Product specs: `docs/product/pages/accounts.md`,
+> `docs/product/pages/journal.md`. Feature spec: `docs/product/features.md`.
 
 ## 1. Scope
 
@@ -314,7 +317,7 @@ When `enableExpanding` is true and `getSubRows` is provided:
 const expanded = ref<ExpandedState>({});
 ```
 
-2. Add to table options:
+1. Add to table options:
 
 ```ts
 getSubRows: props.getSubRows,

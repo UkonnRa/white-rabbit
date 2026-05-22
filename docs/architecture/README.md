@@ -263,101 +263,32 @@ Architecture decisions and trade-offs are recorded in ADRs:
 - See `docs/adr/0004-transaction-boundaries-long-running-processes.md`
 - See `docs/adr/0005-unit-of-work-write-service-split.md`
 - See `docs/adr/0006-nuxt-frontend-client-abstraction.md`
-- See `docs/adr/0007-headless-ui-system-with-token-recipe-theming.md`
+- See `docs/adr/0007-headless-ui-system-with-token-recipe-theming.md` (SUPERSEDED)
+- See `docs/adr/0008-nuxt-ui-migration.md`
 
-## 16. Headless Component Library — Positioning
+## 16. Nuxt UI — Frontend Component Library
 
-### 16.1 Core Idea
+### 16.1 Decision
 
-The component library separates headless behaviour (Reka UI, TanStack Table)
-from a recipe-driven styling layer, so that the same set of business
-components can render under structurally different design languages — not
-just different color values, but different interaction models, surface
-strategies, and color derivation algorithms — without conditional logic in
-component source code.
+The frontend uses **Nuxt UI v4** as its sole component library.
+Nuxt UI is built on Reka UI + TanStack, integrates natively with
+Nuxt 4 + Tailwind CSS v4, and provides 125+ pre-built components.
+See `docs/adr/0008-nuxt-ui-migration.md`.
 
-### 16.2 Problem: Design-Language Lock-In
+### 16.2 Component Usage
 
-Mainstream component libraries couple behaviour and styling:
+Business components use Nuxt UI directly:
 
-| Approach                | Examples                       | What you can swap                         | What you cannot swap                                                                                     |
-| ----------------------- | ------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Full-suite library      | Vuetify, Ant Design, PrimeVue  | Colors, radii, density via tokens/presets | Interaction paradigm (state layer vs focus ring), surface hierarchy strategy, color derivation structure |
-| Copy-paste headless     | shadcn/ui                      | Theoretically everything                  | In practice, changes scatter across every copied file; upstream a11y fixes cannot be synced              |
-| Unstyled + pass-through | PrimeVue unstyled, Headless UI | Class names on predefined sections        | PT API couples styling to internal DOM section names; cannot change interaction model                    |
+| Business Component | Nuxt UI Primitives Used |
+| --- | --- |
+| `JournalCard` | UCard, UButton |
+| `JournalForm` | UModal, UInput, UTextarea, UButton |
+| `AccountTable` | UTable (expandable rows via TanStack) |
+| `AccountForm` | UModal, UInput, UTextarea, UButton |
+| `AccountDeleteConfirm` | UModal, UInput, UButton |
 
-All three lock the consumer into one design-language philosophy once
-non-trivial customisation begins.
+### 16.3 Theming
 
-### 16.3 Our Approach: Recipe-Separated Theming
-
-```text
-Business components (JournalTable, JournalForm)
-        ↓ uses
-Base components (AppButton, AppInput, AppCard, …)
-        ↓ injects recipe from
-Theme packages (tailwind-default/ , md3-expressive/)
-        ↓ wraps
-Headless primitives (Reka UI, TanStack Table)   ← npm upgrades
-```
-
-Each theme package provides:
-
-- **Token CSS** — `--wr-*` custom properties scoped by `data-theme` ×
-  `data-mode`, with a per-theme seed-to-token derivation algorithm.
-- **Component recipes** — `ComponentRecipe` objects mapping
-  variant/size/interaction props to Tailwind class lists.
-- **Directives** (optional) — e.g. MD3's `v-ripple`, applied by the
-  `useRipple` composable only when the active theme declares it.
-
-Base components contain zero style constants. `useRecipe("button", props)`
-resolves classes from the injected theme; `useRipple(elRef)` attaches or
-detaches interaction effects as the theme changes.
-
-### 16.4 Structural Color Gap
-
-The two themes differ not just in palette values but in how colors are
-derived from a seed:
-
-| Dimension            | md3-expressive                                        | tailwind-default                                                             |
-| -------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Derivation           | Single seed → all 29+ roles via HCT `SchemeTonalSpot` | Seed extracts hue → oklch accent scale; surfaces stay on fixed neutral scale |
-| Secondary / Tertiary | Algorithmically derived (hue-shifted)                 | Neutral (no colored secondary); no tertiary concept                          |
-| Surfaces             | 5-level container hierarchy, tinted toward primary    | 2-level surface / surface-variant from neutral ramp, no primary tint         |
-| Dark mode            | Tonal palette tone flip (T80↔T20)                     | Scale index flip (shade-600↔shade-400, neutral-50↔neutral-900)               |
-
-Changing the seed in MD3 shifts the entire mood (surfaces, secondary,
-containers all move). Changing the seed in tailwind-default shifts only the
-accent — surfaces remain clean neutral.
-
-See `docs/architecture/color-palette-design.md` for the full comparison
-with Radix Colors, Ant Design, PrimeVue, and shadcn/ui.
-
-### 16.5 Strengths
-
-- **Interaction states are a first-class design dimension.** Hover, focus,
-  pressed, disabled are declared per-theme in recipes, not hardcoded in
-  components. MD3 uses state layer + ripple; Tailwind uses focus ring +
-  scale — `AppButton.vue` has zero conditional branches.
-- **Color derivation is structurally different per theme**, not just
-  different values in the same slots. This produces a genuine visual gap
-  between design languages.
-- **Headless primitives arrive via npm.** Reka UI and TanStack Table
-  a11y/keyboard fixes propagate through normal package upgrades, unlike
-  shadcn's copy-paste model.
-- **Dark mode is orthogonal to theme and seed color.** Three independent
-  axes (design language × seed color × light/dark) compose freely.
-
-### 16.6 Weaknesses
-
-- **N×M recipe maintenance.** Every base component needs a recipe in every
-  theme. Currently 14 components × 2 themes = 28 recipe files. Adding a
-  third theme adds 14 more.
-- **Custom abstraction.** The recipe system is project-specific; new
-  contributors must learn it. No community ecosystem to draw from.
-- **Edge-case coverage is self-built.** No equivalent of Vuetify's
-  feature-dense `v-data-table` (virtual scroll, server-side pagination,
-  grouped rows). Complex patterns must be implemented from scratch.
-- **Runtime JS cost for theme switch.** Seed token regeneration runs JS
-  (`el.style.setProperty` in a loop) rather than pure CSS selector toggle.
-  Measured under 100ms, but strictly more expensive than a class swap.
+Theming is configured in `app.config.ts` via Nuxt UI's theme API.
+Only light/dark mode is exposed; there is no multi-design-language
+switching. Color tokens follow Nuxt UI's default Tailwind-based palette.

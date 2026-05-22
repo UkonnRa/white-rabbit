@@ -1,6 +1,10 @@
-# Color Palette Design: Why Themes Must Differ Structurally
+# Color Palette Design (ARCHIVED)
 
-## Problem
+> **Superseded by Nuxt UI migration.** See `docs/adr/0008-nuxt-ui-migration.md`.
+> The multi-theme system described below has been removed. Theming now uses
+> Nuxt UI's built-in Tailwind-based palette configured in `app.config.ts`.
+
+## Problem (Historical)
 
 If both `tailwind-default` and `md3-expressive` use the same MD3
 `SchemeTonalSpot` algorithm to derive colors from a seed, the only remaining

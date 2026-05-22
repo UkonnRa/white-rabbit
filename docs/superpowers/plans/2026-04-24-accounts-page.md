@@ -1,9 +1,10 @@
-# Accounts Page + Journal Dashboard Implementation Plan
+# Accounts Page + Journal Dashboard Implementation Plan (ARCHIVED)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task.
-> Steps use checkbox (`- [ ]`) syntax for tracking.
+> **This plan has been superseded.** The project has migrated from a
+> custom headless component system to Nuxt UI. See
+> `docs/adr/0008-nuxt-ui-migration.md`. The content below is retained
+> for historical reference only; component names and architecture no
+> longer apply.
 
 **Goal:** Ship the Accounts page (`/journals/:id/accounts`) as an
 expandable TanStack Table and a minimal Journal Dashboard

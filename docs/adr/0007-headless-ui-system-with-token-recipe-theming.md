@@ -1,9 +1,15 @@
-# ADR-0007: Headless UI System with Token + Recipe Theming
+# ADR-0007 (SUPERSEDED): Headless UI System with Token + Recipe Theming
 
-- Status: Proposed
+- Status: **Superseded by ADR-0008** (Nuxt UI Migration)
 - Date: 2026-04-09
+- Superseded: 2026-05-23
 
-## Context
+> This decision has been reversed. The custom headless component system
+> described below has been replaced by Nuxt UI v4. See `ADR-0008-nuxt-ui-migration.md`.
+>
+> The content below is retained for historical reference only.
+
+## Context (Historical)
 
 The project currently uses Vuetify 4.0.5 as a full-featured Material Design
 component library. All three business components (JournalCard, JournalForm,

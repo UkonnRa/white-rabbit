@@ -90,8 +90,8 @@ journal-scoped layout (see §4.3).
   `[archive]`, `[🗑] delete`. Root rows show only `[+]`.
 - **Expand/collapse** — clicking the chevron toggles child rows via TanStack
   Table's `getExpandedRowModel`. Default: all 5 roots expanded on first visit.
-- **Built on `AppDataTable`** with expanding support — the same recipe-driven
-  table component used elsewhere, enhanced with `getSubRows` + expanded state.
+- **Built on `UTable`** with expanding support via TanStack
+  `getSubRows` + `getExpandedRowModel`.
 
 ### 4.2 App Header and Breadcrumb
 
@@ -127,7 +127,7 @@ and exposes it to the page via a `useCurrentJournal()` composable (new).
 
 ## 5. Account Table — Detailed Design
 
-The accounts are rendered as an **expandable table** using `AppDataTable`
+The accounts are rendered as an **expandable table** using Nuxt UI's `UTable`
 with TanStack Table's [expanding](https://tanstack.com/table/latest/docs/guide/expanding)
 feature. The flat account list from the backend is transformed into nested
 rows (`subRows`) client-side. Root accounts (parent_id = null) form the
@@ -138,8 +138,8 @@ top-level rows; all other accounts are nested under their parent via `subRows`.
 | Column  | Data source    | Format                                                                                                                                                                                          |
 | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Name    | `account`      | Expand chevron + type icon (per `AccountType`) + account name (left-padded by depth × 12px) + "Archived" badge (if `archived_at`). Roots are bold; leaf accounts (no children) show no chevron. |
-| Tags    | `account.tags` | `AppChip` components. Hidden when empty.                                                                                                                                                        |
-| Actions | —              | `[+] add child` (always), `[✎] edit` (non-root), `[archive]` (non-root, non-archived), `[🗑] delete` (non-root). Delete disabled with tooltip when records reference this account (future).     |
+| Tags    | `account.tags` | `UChip` components. Hidden when empty. |
+| Actions | —              | `[+] add child` (always), `[✎] edit` (non-root), `[archive]` (non-root, non-archived), `[🗑] delete` (non-root). Delete disabled with tooltip when records reference this account (future). |
 
 Future columns (gated on records):
 
@@ -206,8 +206,8 @@ TanStack Table's `getSubRows` returns `row.subRows` for each row.
 
 ### 6.1 Create
 
-Triggered by any `[+]` action or the "Add account" inline CTA. Opens an
-`AppDialog` titled "Add Account". The parent is preset to the node the
+Triggered by any `[+]` action or the "Add account" inline CTA. Opens a
+`UModal` titled "Add Account". The parent is preset to the node the
 user clicked from and displayed as a read-only breadcrumb at the top of
 the form (`Asset > Bank > …`). The form fields are:
 
@@ -215,9 +215,9 @@ the form (`Asset > Bank > …`). The form fields are:
 | ----------- | -------------- | ---------------------------------------------------------------------------------- |
 | Parent      | Read-only path | Preset from the `[+]` row clicked. Displayed as a breadcrumb (`Asset > Bank > …`). |
 | Type        | Read-only      | Inherited from parent — displayed for clarity, not editable                        |
-| Name        | `AppInput`     | Required, non-empty, must not match reserved root names                            |
-| Description | `AppTextarea`  | Optional                                                                           |
-| Tags        | `AppTagInput`  | Optional                                                                           |
+| Name        | `UInput`      | Required, non-empty, must not match reserved root names                            |
+| Description | `UTextarea`   | Optional                                                                           |
+| Tags        | `UChip`       | Optional                                                                           |
 
 Reserved-name validation happens client-side for fast feedback and is
 re-checked by the domain (`Account::is_reserved_name`) on submit.
@@ -271,12 +271,9 @@ Type "{name}" to confirm:  [____________]
 
 ### 7.1 Shared Project-Level Components
 
-All required primitives already exist under `app/components/ui/`
-(`AppButton`, `AppIcon`, `AppChip`, `AppInput`, `AppTextarea`,
-`AppTagInput`, `AppDialog`, `AppMenu`, `AppTooltip`). **No new shared
-components are needed for this page.**
-
-`AppDataTable` is enhanced in this slice with optional expanding support
+Nuxt UI primitives used (`UButton`, `UIcon`, `UChip`, `UInput`, `UTextarea`,
+`UModal`, `UCard`, `UTooltip`). **No new shared components are needed.**
+`UTable` is used with expanding support
 (`getSubRows`, `enableExpanding` props, `getExpandedRowModel`). Existing
 table usage (without expanding) is unaffected.
 
@@ -286,7 +283,7 @@ Live in `app/components/` (not `ui/`) — specific to the Accounts page.
 
 | Component                   | Responsibility                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `AccountTable.vue`          | Renders accounts as an expandable TanStack Table. Uses enhanced `AppDataTable`. Defines columns, owns expanded state. |
+| `AccountTable.vue`          | Renders accounts as an expandable table. Uses `UTable` with TanStack expanding. Defines columns, owns expanded state. |
 | `AccountForm.vue`           | Create/edit form. Mirrors `JournalForm.vue`. Parent path displayed as read-only breadcrumb. Emits `submit`, `cancel`. |
 | `AccountArchiveConfirm.vue` | Archive confirmation dialog content — name + cascade preview.                                                         |
 | `AccountDeleteConfirm.vue`  | Delete confirmation dialog content — name + cascade preview + typed-name gate.                                        |
