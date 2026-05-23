@@ -4,6 +4,8 @@ export default defineNuxtConfig({
   ssr: false,
   devServer: { port: 1420 },
   devtools: { enabled: false },
+  css: ["~/assets/css/tailwind.css"],
+  modules: ["@nuxt/ui"],
   ui: {
     fonts: false,
   },
