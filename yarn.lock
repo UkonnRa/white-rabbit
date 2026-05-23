@@ -1361,6 +1361,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@iconify-json/lucide@npm:^1.2.109":
+  version: 1.2.109
+  resolution: "@iconify-json/lucide@npm:1.2.109"
+  dependencies:
+    "@iconify/types": "npm:*"
+  checksum: 10c0/ad04b40f926d448184c9f0d778993e6e3a7230e88be2fd68546b6f7f78aa2187a3686a6d65f7089cfa4abe929d392b53e1fac4b86d1f40c1057220f6000168c1
+  languageName: node
+  linkType: hard
+
 "@iconify/collections@npm:^1.0.679":
   version: 1.0.687
   resolution: "@iconify/collections@npm:1.0.687"
@@ -2102,7 +2111,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nuxt/ui@npm:latest":
+"@nuxt/ui@npm:^4.8.0":
   version: 4.8.0
   resolution: "@nuxt/ui@npm:4.8.0"
   dependencies:
@@ -5499,7 +5508,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@white-rabbit/endpoint-tauri@workspace:packages/endpoint-tauri"
   dependencies:
-    "@nuxt/ui": "npm:latest"
+    "@nuxt/ui": "npm:^4.8.0"
     "@tailwindcss/vite": "npm:^4.3.0"
     "@tauri-apps/api": "npm:^2.11.0"
     "@tauri-apps/cli": "npm:^2.11.2"
@@ -5518,7 +5527,7 @@ __metadata:
   dependencies:
     "@iconify/vue": "npm:^5.0.1"
     "@nuxt/eslint": "npm:^1.15.2"
-    "@nuxt/ui": "npm:latest"
+    "@nuxt/ui": "npm:^4.8.0"
     "@tailwindcss/vite": "npm:^4.3.0"
     "@tanstack/vue-table": "npm:^8.21.3"
     "@vitejs/plugin-vue": "npm:^6.0.7"
@@ -12768,6 +12777,7 @@ __metadata:
     "@eslint/js": "npm:^10.0.1"
     "@eslint/json": "npm:^1.2.0"
     "@eslint/markdown": "npm:^8.0.1"
+    "@iconify-json/lucide": "npm:^1.2.109"
     "@tailwindcss/vite": "npm:^4.3.0"
     "@types/node": "npm:^25.9.1"
     eslint: "npm:^10.4.0"
