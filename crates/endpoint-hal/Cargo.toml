@@ -17,7 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 shared = { path = "../shared" }
 tokio.workspace = true
-tower-http = { version = "0.6", features = ["cors", "fs"] }
+tower-http = { version = "0.7", features = ["cors", "fs"] }
 urlencoding = "2"
 
 [dev-dependencies]

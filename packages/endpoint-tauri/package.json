@@ -11,17 +11,17 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@white-rabbit/shared": "workspace:*",
-    "vue": "^3.5.34"
+    "vue": "^3.5.39"
   },
   "devDependencies": {
-    "@nuxt/ui": "^4.8.0",
-    "@tailwindcss/vite": "^4.3.0",
-    "@tauri-apps/cli": "^2.11.2",
-    "nuxt": "^4.4.6",
-    "tailwindcss": "^4.3.0",
+    "@nuxt/ui": "^4.9.0",
+    "@tailwindcss/vite": "^4.3.2",
+    "@tauri-apps/cli": "^2.11.4",
+    "nuxt": "^4.4.8",
+    "tailwindcss": "^4.3.2",
     "typescript": "~6.0.3"
   }
 }
